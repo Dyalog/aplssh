@@ -1,0 +1,127 @@
+﻿:Namespace SSH
+    ⍝ APL bindings for the libssh2 library
+
+    ⍝ Low-level C functions
+    :Namespace C
+        ∇ l←lib;isOS
+
+            ⍝ Return the right library for our OS
+            isOS←{⍵≡(≢⍵)↑⊃#.⎕WG'APLVersion'}
+
+            :If isOS'Windows'
+                l←'libssh2.dll'
+            :ElseIf isOS'Linux'
+            :OrIf isOS'Mac'
+                l←'libssh2.so'
+            :EndIf
+        ∇
+
+        ∇ Init;l
+            l←lib
+            ⎕NA'I  ',l,'|libssh2_agent_connect&                  P'
+            ⎕NA'I  ',l,'|libssh2_agent_disconnect&               P'
+            ⎕NA'I  ',l,'|libssh2_agent_free                      P'
+            ⎕NA'I  ',l,'|libssh2_agent_get_identity              P P P'
+            ⎕NA'P  ',l,'|libssh2_version                         I'
+            ⎕NA'P  ',l,'|libssh2_agent_init                      P'
+            ⎕NA'I  ',l,'|libssh2_agent_list_identities           P'
+            ⎕NA'I  ',l,'|libssh2_agent_userauth                  P <0C P'
+            ⎕NA'I  ',l,'|libssh2_channel_close                   P'
+            ⎕NA'P  ',l,'|libssh2_channel_direct_tcpip_ex&        P <0C I <0C I'
+            ⎕NA'I  ',l,'|libssh2_channel_eof                     P'
+            ⎕NA'I  ',l,'|libssh2_channel_flush_ex&               P I'
+            ⎕NA'P  ',l,'|libssh2_channel_forward_accept&         P'
+            ⎕NA'I  ',l,'|libssh2_channel_forward_cancel&         P'
+            ⎕NA'P  ',l,'|libssh2_channel_forward_listen_ex&      P <0C I >I I'
+            ⎕NA'I  ',l,'|libssh2_channel_free&                   P'
+            ⎕NA'I  ',l,'|libssh2_channel_get_exit_signal         P >P >P >P >P >P >P'
+            ⎕NA'I  ',l,'|libssh2_channel_get_exit_status         P'
+            ⎕NA'I  ',l,'|libssh2_channel_handle_extended_data2   P I'
+            ⎕NA'P  ',l,'|libssh2_channel_open_ex&                P <0C U U U <0C U'
+            ⎕NA'I  ',l,'|libssh2_channel_process_startup&        P <0C U <0C U'
+            ⎕NA'I  ',l,'|libssh2_channel_read_ex&                P I =U1[] P'
+            ⎕NA'I  ',l,'|libssh2_channel_receive_window_adjust2& P U8 U1 >U'
+            ⎕NA'I  ',l,'|libssh2_channel_request_pty_ex&         P <0C U <0C U I I I I'
+            ⎕NA'I  ',l,'|libssh2_channel_send_eof&               P'
+            ⎕NA'   ',l,'|libssh2_channel_set_blocking&           P I'
+            ⎕NA'I  ',l,'|libssh2_channel_setenv_ex&              P <0C U <0C U'
+            ⎕NA'I  ',l,'|libssh2_channel_wait_closed&            P'
+            ⎕NA'I  ',l,'|libssh2_channel_wait_eof&               P'
+            ⎕NA'U8 ',l,'|libssh2_channel_window_read_ex&         P >U8 >U8'
+            ⎕NA'U8 ',l,'|libssh2_channel_window_write_ex&        P >U8'
+            ⎕NA'I  ',l,'|libssh2_channel_write_ex&               P I <U1[] P'
+            ⎕NA'   ',l,'|libssh2_exit'
+            ⎕NA'   ',l,'|libssh2_free                            P P'
+            ⎕NA'P  ',l,'|libssh2_hostkey_hash                    P I'
+            ⎕NA'I  ',l,'|libssh2_init                            I'
+            ⎕NA'   ',l,'|libssh2_keepalive_config                P I U'
+            ⎕NA'   ',l,'|libssh2_keepalive_send                  P >I'
+            ⎕NA'I  ',l,'|libssh2_knownhost_addc                  P <0C <0C <0C P <0C P I P'
+            ⎕NA'I  ',l,'|libssh2_knownhost_checkp                P <0C I <0C P I P'
+            ⎕NA'I  ',l,'|libssh2_knownhost_del                   P P'
+            ⎕NA'   ',l,'|libssh2_knownhost_free                  P'
+            ⎕NA'I  ',l,'|libssh2_knownhost_get                   P P P'
+            ⎕NA'I  ',l,'|libssh2_knownhost_init                  P'
+            ⎕NA'I  ',l,'|libssh2_knownhost_readfile              P <0C I'
+            ⎕NA'I  ',l,'|libssh2_knownhost_readline              P <0C P I'
+            ⎕NA'I  ',l,'|libssh2_knownhost_writefile             P <0C I'
+            ⎕NA'I  ',l,'|libssh2_knownhost_writeline             P P =U1[] P >P I'
+            ⎕NA'I  ',l,'|libssh2_poll                            ={U1 P U8 U8}[] U U8'
+            ⎕NA'I  ',l,'|libssh2_publickey_add_ex                P <0C U8 <U1[] U8 I1 U8 <{P U8 P U8 I1}[]'
+            
+            ⎕NA'P  ',l,'|libssh2_scp_recv&                       P <0C P'
+            ⎕NA'P  ',l,'|libssh2_scp_send64&                     P <0C I U8 P P'
+            ⎕NA'P  ',l,'|libssh2_session_abstract                P'
+
+            ⎕NA'P  ',l,'|libssh2_session_banner_get              P'
+            ⎕NA'I  ',l,'|libssh2_session_banner_set              P <0C'
+            ⎕NA'I  ',l,'|libssh2_session_block_directions        P'
+            ⎕NA'I  ',l,'|libssh2_session_disconnect_ex&          P I <0C <0C'
+            ⎕NA'I  ',l,'|libssh2_session_flag                    P I I'
+            ⎕NA'I  ',l,'|libssh2_session_free                    P'
+            ⎕NA'I  ',l,'|libssh2_session_get_blocking            P'
+            ⎕NA'U8 ',l,'|libssh2_session_get_timeout             P'
+            ⎕NA'I  ',l,'|libssh2_session_handshake&              P I'
+            ⎕NA'P  ',l,'|libssh2_session_hostkey                 P >P >I'
+            ⎕NA'P  ',l,'|libssh2_session_init_ex                 P P P P'
+            ⎕NA'I  ',l,'|libssh2_session_last_errno              P'
+            ⎕NA'I  ',l,'|libssh2_session_last_error              P >P <0C I'
+            ⎕NA'I  ',l,'|libssh2_session_method_pref             P I <0C'
+            ⎕NA'P  ',l,'|libssh2_session_methods                 P I'
+            ⎕NA'   ',l,'|libssh2_session_set_blocking            P I'
+            ⎕NA'I  ',l,'|libssh2_session_set_last_error          P I <0C'
+            ⎕NA'   ',l,'|libssh2_session_set_timeout             P I8'
+            ⎕NA'I  ',l,'|libssh2_session_supported_algs          P I >P'
+
+            ⎕NA'I  ',l,'|libssh2_sftp_close_handle               P'
+            ⎕NA'I  ',l,'|libssh2_sftp_fstat_ex                   P P I'
+            ⎕NA'I  ',l,'|libssh2_sftp_fstatvfs                   P       >{U8 U8 U8 U8 U8 U8 U8 U8 U8 U8 U8}'
+            ⎕NA'I  ',l,'|libssh2_sftp_fsync                      P'
+            ⎕NA'I  ',l,'|libssh2_sftp_init                       P'
+            ⎕NA'U8 ',l,'|libssh2_sftp_last_error                 P'
+            ⎕NA'I  ',l,'|libssh2_sftp_mkdir_ex                   P <0C U U8'
+            ⎕NA'P  ',l,'|libssh2_sftp_open_ex                    P <0C U U8 I8 I'
+            ⎕NA'I  ',l,'|libssh2_sftp_read&                      P =U1[] P'
+            ⎕NA'I  ',l,'|libssh2_sftp_readdir_ex                 P =U1[] P =U1[] P >{U8 U8 U8 U8 U8 U8 U8}'
+            ⎕NA'I  ',l,'|libssh2_sftp_rename_ex                  P <0C U <0C U U8'
+            ⎕NA'I  ',l,'|libssh2_sftp_rmdir_ex                   P <0C U'
+            ⎕NA'   ',l,'|libssh2_sftp_seek64                     P U8'
+            ⎕NA'I  ',l,'|libssh2_sftp_shutdown                   P'
+            ⎕NA'I  ',l,'|libssh2_sftp_stat_ex                    P <0C U I >{U8 U8 U8 U8 U8 U8 U8}'
+            ⎕NA'I  ',l,'|libssh2_sftp_statvfs                    P <0C P >{U8 U8 U8 U8 U8 U8 U8 U8 U8 U8 U8}'
+            ⎕NA'I  ',l,'|libssh2_sftp_symlink_ex                 P <0C U <0C U I'
+            ⎕NA'U8 ',l,'|libssh2_sftp_tell64                     P'
+            ⎕NA'I  ',l,'|libssh2_sftp_unlink_ex                  P <0C U'
+            ⎕NA'I  ',l,'|libssh2_sftp_write&                     P <0C P'
+
+            ⎕NA'I  ',l,'|libssh2_userauth_authenticated          P'
+            ⎕NA'P  ',l,'|libssh2_userauth_list                   P <0C U'
+            ⎕NA'I  ',l,'|libssh2_userauth_password_ex            P <0C U <0C U P'
+            ⎕NA'I  ',l,'|libssh2_userauth_publickey_fromfile_ex  P <0C U P <0C <0C'
+            ⎕NA'I  ',l,'|libssh2_userauth_publickey_frommemory   P <0C U <0C U <0C U <0C'
+
+            ⎕NA'P  ',l,'|libssh2_version                         I'
+        ∇
+    :EndNamespace
+
+:EndNamespace
