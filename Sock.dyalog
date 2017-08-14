@@ -50,6 +50,7 @@
         AI_ADDRCONFIG←32
         AI_V4MAPPED←8
         AI_CANONNAME←2
+        AI_PASSIVE←1
 
         SOCK_STREAM←1
         SOCK_DGRAM←2
@@ -88,6 +89,7 @@
         ⍝ getaddrinfo
         ⎕NA'I ',socklib,'|getaddrinfo <0C <0C P >P'
         ⎕NA'  ',socklib,'|freeaddrinfo P'
+        'getaddrinfo_p'⎕NA'I ',socklib,'|getaddrinfo P <0C P >P'
 
     ∇
 
@@ -119,7 +121,10 @@
     ∇
 
     ⍝ Get address info
+    ⍝ Arguments: <family> GetAddrInfo host port 
+    
     ∇ r←{family} GetAddrInfo (host port);hints;rt;ptr;ai;numf;sz;blk;sptr;canon
+
         ⍝ if no family is given, use all
         :If 0=⎕NC'family' ⋄ family←#.Sock.Cnst.AF_UNSPEC ⋄ :EndIf
 
@@ -129,8 +134,23 @@
         hints←⎕NEW #.Sock.addrinfo
         hints.ai_family←family
         hints.ai_flags←∨bin #.Sock.Cnst.(AI_V4MAPPED AI_CANONNAME AI_ADDRCONFIG)
-
-        rt sptr←getaddrinfo host port (hints.Ref) 0
+        hints.ai_flags←∨bin hints.ai_flags, (0=≢host)/#.Sock.Cnst.AI_PASSIVE
+        
+        
+        :If 0=≢host
+            ⍝ pass in NULL to show that no host is meant
+            rt sptr←getaddrinfo_p 0 port (hints.Ref) 0
+        :Else
+            rt sptr←getaddrinfo host port (hints.Ref) 0
+        :EndIf
+        
+        ⍝ if EAI_NONAME, we've found nothing, which is technically not an error state,
+        ⍝ so just return an empty list ("everything we found")
+        :If rt=#.Sock.Err.EAI_NONAME
+            r←⍬
+            :Return
+        :EndIf
+        
         ⎕SIGNAL (rt≠0)/⊂('EN'#.Sock.SOCK_ERR)('Message' (⍕rt))
 
         r←⍬
@@ -155,7 +175,7 @@
             :EndIf
 
             ⍝ add it to the return value
-            r,←⊂numf,blk,canon
+            r,←⊂numf,blk,⊂canon
             
             ⍝ look at the next field
             ptr←ai.ai_next
@@ -169,6 +189,115 @@
 
     ∇
 
+    ⍝ IPV4 socket.
+    :Class Socket
+        :Field Private fd←¯1
+        :Field Private fam
+        :Field Private type
+        :Field Private shouldClose←0
+        
+        bin←{2⊥⍺⍺/2⊥⍣¯1⊢(⍺⍺/⍬),⍵}
+        
+        ⍝ Make an IPV4 socket
+        ∇init type_
+            :Access Public
+            :Implements Constructor
+            
+            fam←#.Sock.Cnst.AF_INET
+            type←type_
+            
+            fd←#.Sock.socket fam type 0
+            :If fd=¯1
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))
+            :EndIf
+        ∇
+        
+        ∇destroy
+            :Access Private
+            :Implements Destructor
+            
+            →(fd=¯1)/0
+            →(~shouldClose)/0
+            Close
+        ∇
+        
+        ⍝ Close the socket
+        ∇Close;lfd
+            :Access Public
+            →(fd=¯1)/0
+            lfd←fd
+            shouldClose←0
+            fd←¯1
+            {}#.Sock.close lfd
+        ∇
+        
+        ⍝ Get the file descriptor
+        ∇n←FD
+            :Access Public
+            n←fd
+        ∇
+        
+        ⍝ Connect it
+        ∇Connect (host port);addrs;addr;rt;blk
+            :Access Public
+            ⍝ find the data for the host and port
+            addrs←fam #.Sock.GetAddrInfo (host port)
+            ⎕SIGNAL(0=≢addrs)/⊂('EN'11)('Message' 'Address not found.')
+            
+            ⍝ find one that matches our type
+            addrs←(type=2⊃¨addrs)/addrs
+            ⎕SIGNAL(0=≢addrs)/⊂('EN'11)('Message' ('No connection to address found using type ',⍕type))
+            
+            ⍝ use the first one, if there is more than one left, they all must point to the same place
+            addr←⊃addrs
+            
+            ⍝ the parsed address is contained in the 4th element
+            blk←4⊃addr
+            
+            rt←#.Sock.connect fd blk.Ref blk.Size
+            
+            :If rt≠0
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))
+            :EndIf
+            
+            shouldClose←1
+        ∇
+        
+        ⍝ Send some data via the socket (bytes, numeric)
+        ∇{flags} Send data;r
+            :Access Public
+            ⍝ no flags → 0
+            :If 0=⎕NC'flags' ⋄ flags←0 ⋄ :EndIf
+            
+            ⍝ list of flags → or them together
+            flags←∨bin flags
+            
+            r←#.Sock.send fd data (≢data) flags
+            
+            :If r≠≢data
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))                
+            :EndIf
+        ∇
+        
+        ⍝ Receive data from the socket (bytes, numeric)
+        ∇data←{flags} Recv size;r
+            :Access Public
+            ⍝ no flags → 0
+            :If 0=⎕NC'flags' ⋄ flags←0 ⋄ :EndIf
+            ⍝ list of flags → or them together
+            flags←∨bin flags
+            
+            ⍝ receive some data
+            r data←#.Sock.recv fd (size/0) size flags
+            
+            :If r=¯1
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))                  
+            :EndIf
+            data←r↑data
+        ∇
+        
+    :EndClass
+    
     :Class addrinfo :#.CInterop.Struct
         ⍝  this field is only there for alignment on 64-bit
         ⍝                                     \
@@ -180,6 +309,7 @@
         ∇init;struct
             :Access Public
             struct←(1+#.CInterop.Bits=32)⊃STRUCT STRUCT_32
+            state↓⍨←#.CInterop.Bits=32
             :Implements Constructor :Base struct
             Write state ⍝ zero it all out
         ∇
@@ -187,6 +317,7 @@
         ∇init_mem addr;struct
             :Access Public
             struct←(1+#.CInterop.Bits=32)⊃STRUCT STRUCT_32
+            state↓⍨←#.CInterop.Bits=32
             :Implements Constructor :Base (struct addr)
             state←Read ⍝ read the current state
         ∇
