@@ -1,6 +1,150 @@
-﻿:Namespace SSH
+⍝∇:require =/CInterop.dyalog
+⍝∇:require =/Sock.dyalog
+
+:Namespace SSH
     ⍝ APL bindings for the libssh2 library
 
+    SSH_ERR←801 ⍝ signaled when there's something wrong with the SSH library
+    
+    init←0
+    ∇ Init;r
+        →init/0 ⍝ don't initialize twice
+        
+        ⍝ Make sure the socket library is initialized
+        #.Sock.Init
+        
+        ⍝ load the library functions
+        C.LoadLib
+            
+        ⍝ run the libssh2 initialization
+        r←C.libssh2_init 0
+            
+        ⍝ signal an error if it did not work
+        ⎕SIGNAL⊂('EN'SSH_ERR)('Message' (⍕r))
+        
+        init←1 
+    ∇
+    
+    ⍝ An SSH session
+    :Class Session
+        :Field Private Shared S ⍝ shorthand for the namespace
+        :Field Private Shared C ⍝ shorthand for all the C functions
+        :Field Private session←0
+        :Field Private socket←⍬ ⍝ socket associated with the session, if there is one
+        
+        ⍝ common initialization routine
+        ∇_init_common
+            ⍝ put the namespaces in the shorthand fields
+            S ← #.SSH
+            C ← #.SSH.C
+
+            ⍝ is the SSH lib initialized yet?
+            :If ~#.SSH.init ⋄ #.SSH.Init ⋄ :EndIf
+            
+            ⍝ make a session
+            ⍝ we don't do callbacks into APL, because APL doesn't do callbacks into APL...
+            session←C.libssh2_session_init_ex 0 0 0 0
+            ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' 'libssh2 initialization failed')
+        ∇
+        
+        ⍝ Initialize the session
+        ∇init
+            :Implements Constructor
+            :Access Public
+            _init_common
+        ∇
+        
+        ⍝ Utility initializer, which does socket creation, connection, and handshake
+        ⍝ all at once (if you don't need anything special)
+        ∇init_connect (host port);sock
+            :Implements Constructor
+            :Access Public
+            _init_common ⍝ initialization
+            sock←⎕NEW #.Sock.Socket #.Sock.Cnst.SOCK_STREAM
+            sock.Connect (host port)
+            Handshake sock
+        ∇
+        
+        ⍝ Handshake. 'sock' should be a socket object
+        ∇Handshake sock;r
+            :Access Public
+            r←C.libssh2_session_handshake session sock.FD
+            ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' ('Handshake failed:', ⍕r))
+            socket←sock
+        ∇
+        
+        ⍝ Get the hostkey hash, as a byte vector
+        ⍝ Type may be 'MD5' or 'SHA1' (or, of course, LIBSSH2_HOSTKEY_HASH_...)
+        ∇hash←HostkeyHash type;blk;sz;ptr
+            :Access Public
+            sz←0
+            
+            ⍝ support string input
+            :If 'md5'≡819⌶type  ⋄ type←S.HOSTKEY_HASH_MD5  ⋄ :EndIf
+            :If 'sha1'≡819⌶type ⋄ type←S.HOSTKEY_HASH_SHA1 ⋄ :EndIf
+            
+            ⍝ get the size (as defined in the documentation)
+            :If type≡S.HOSTKEY_HASH_MD5  ⋄ sz←16 ⋄ :EndIf
+            :If type≡S.HOSTKEY_HASH_SHA1 ⋄ sz←20 ⋄ :EndIf
+            
+            ⍝ if the size is still unknown, then the hash type was invalid
+            ⎕SIGNAL(sz=0)/⊂('EN'11)('Message' ('Invalid hash type: ',∊⍕type))
+            
+            ⍝ ask for the hash type
+            ptr←C.libssh2_hostkey_hash session sz
+            ⎕SIGNAL(ptr=0)/⊂('EN'S.SSH_ERR)('Message' ('Hostkey hash not available.'))
+            
+            ⍝ reserve some memory to store the hash type
+            blk←⎕NEW #.CInterop.DataBlock (sz/0)
+            blk.Load ptr sz
+            hash←blk.Data
+        ∇
+        
+        ⍝ Get a list of supported authentication methods.
+        ⍝ libssh2 returns this as a comma-delineated string, this being APL
+        ⍝ we can return a string vector instead.
+        ⍝ Internally, this works by trying to authenticate with SSH_USERAUTH_NONE,
+        ⍝ might you find a server that supports this, we won't get a list back.
+        ⍝
+        ⍝ This function will check if that authentication succeeded, and will then
+        ⍝ return the empty vector. If the lack of result was due to an error, an error
+        ⍝ will be signaled.
+        ∇list←UserauthList username;ptr;str
+            :Access Public
+            
+            ptr←C.libssh2_userauth_list session username (≢username)
+            
+            :If ptr=0
+                ⍝ did the "authentication" succeed?
+                :If Authenticated
+                    ⍝ such security
+                    list←⍬
+                :Else
+                    ⍝ this really is an error
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' 'libssh2_userauth_list failed')
+                :EndIf
+            :Else
+                ⍝ we have a pointer to a comma-delimited string
+                str←#.CInterop.ReadCStr ptr
+                list←(str≠',')⊆str
+            :EndIf
+        ∇
+        
+        ⍝ See if this session is authenticated. Returns a boolean.
+        ∇r←Authenticated
+            :Access Public
+            r←C.libssh2_userauth_authenticated session
+        ∇
+        
+    :EndClass
+        
+    :Section Constants
+        ⍝ The constants are named as in the C include files, but without the LIBSSH2_ prefix.
+        
+        HOSTKEY_HASH_MD5  ← 1
+        HOSTKEY_HASH_SHA1 ← 2
+        
+    :EndSection
     ⍝ Low-level C functions
     :Namespace C
         ∇ l←lib;isOS
@@ -16,7 +160,9 @@
             :EndIf
         ∇
 
-        ∇ Init;l
+
+        ⍝ load the library functions
+        ∇ LoadLib;l
             l←lib
             ⎕NA'I  ',l,'|libssh2_agent_connect&                  P'
             ⎕NA'I  ',l,'|libssh2_agent_disconnect&               P'
@@ -68,7 +214,7 @@
             ⎕NA'I  ',l,'|libssh2_knownhost_writeline             P P =U1[] P >P I'
             ⎕NA'I  ',l,'|libssh2_poll                            ={U1 P U8 U8}[] U U8'
             ⎕NA'I  ',l,'|libssh2_publickey_add_ex                P <0C U8 <U1[] U8 I1 U8 <{P U8 P U8 I1}[]'
-            
+
             ⎕NA'P  ',l,'|libssh2_scp_recv&                       P <0C P'
             ⎕NA'P  ',l,'|libssh2_scp_send64&                     P <0C I U8 P P'
             ⎕NA'P  ',l,'|libssh2_session_abstract                P'
@@ -121,6 +267,8 @@
             ⎕NA'I  ',l,'|libssh2_userauth_publickey_frommemory   P <0C U <0C U <0C U <0C'
 
             ⎕NA'P  ',l,'|libssh2_version                         I'
+            
+            
         ∇
     :EndNamespace
 

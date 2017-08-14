@@ -1,4 +1,4 @@
-﻿:Namespace CInterop
+:Namespace CInterop
     ⍝ Low-level C interoperation 
 
     init←0
