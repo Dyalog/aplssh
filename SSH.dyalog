@@ -1,4 +1,5 @@
 ﻿⍝∇:require =/CInterop.dyalog
+⍝∇:require =/SSHStruct.dyalog
 ⍝∇:require =/Sock.dyalog
 
 :Namespace SSH
@@ -9,7 +10,10 @@
     init←0
     ∇ Init;r
         →init/0 ⍝ don't initialize twice
-
+    
+        ⍝ Make sure the struct helper is initialized
+        #.SSHStruct.Init
+        
         ⍝ Make sure the socket library is initialized
         #.Sock.Init
 
@@ -195,11 +199,37 @@
         ∇
 
         ⍝ Make a new channel 
-        ∇ch←Channel_Direct_TCPIP (desthost destport shost sport)
+        ∇ch←Channel_Direct_TCPIP (desthost destport shost sport);lch
             :Access Public
-            ch←⎕NEW S.⍙Channel ⎕THIS
-            ch.start_Direct_TCPIP (desthost destport shost sport)
+            lch←⎕NEW S.⍙Channel ⎕THIS
+            lch._start_Direct_TCPIP (desthost destport shost sport)
+            ch←lch
         ∇
+        
+        ⍝ Start an SCP transfer
+        ∇(ch stat)←SCP_Recv path;lch;sb
+            :Access Public
+            lch←⎕NEW S.⍙Channel ⎕THIS
+            sb←lch._start_scp_recv path
+            stat←#.SSHStruct.stat sb
+            ch←lch
+        ∇
+        
+        :Section Convenience
+            ⍝ Read a file over SCP, in one go, even if the connection is non-blocking.
+            ∇(data stat)←ReadFile path;chan;size;amt;agn;d
+                chan stat←SCP_Recv path
+                data←⍬
+                size←⊃stat
+                :While 0<amt←size-≢data
+                    ⍝ If the channel is non-blocking we might need to do this several times.
+                    agn d←chan.Read amt
+                    :If agn ⋄ :Continue ⋄ :EndIf
+                    data,←d
+                :EndWhile
+            ∇
+        :EndSection
+            
     :EndClass
 
     ⍝ these are instantiated by the Session class
@@ -223,7 +253,8 @@
             session←sess
         ∇
         
-        ∇start_Direct_TCPIP (desthost destport shost sport)
+        ⍝ start a direct TCPIP channel
+        ∇_start_Direct_TCPIP (desthost destport shost sport)
             :Access Public
             
             ptr←C.libssh2_channel_direct_tcpip_ex session.Ref desthost destport shost sport
@@ -231,7 +262,17 @@
                 'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
             :EndIf
         ∇
-
+        
+        ⍝ start a channel to receive a file via SCP
+        ∇statblk←_start_scp_recv path
+            :Access Public
+            statblk←⎕NEW #.CInterop.DataBlock (256/0)
+            ptr←C.libssh2_scp_recv2 session.Ref path statblk.Ref
+            :If ptr=0
+                'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
+            :EndIf
+        ∇
+        
         ∇destroy
             :Access Private
             :Implements Destructor
@@ -272,7 +313,7 @@
             :If (rr<0)∧rr≠S.ERROR_EAGAIN
                 ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
             :EndIf
-            (again data)←(rr=S.ERROR_EAGAIN)(rr↑d)
+            (again data)←(rr=S.ERROR_EAGAIN)((0⌈rr)↑d)
         ∇
 
         ⍝ See if the channel is out of data
@@ -366,7 +407,7 @@
             ⎕NA'I  ',l,'|libssh2_poll                            ={U1 P U8 U8}[] U U8'
             ⎕NA'I  ',l,'|libssh2_publickey_add_ex                P <0C U8 <U1[] U8 I1 U8 <{P U8 P U8 I1}[]'
 
-            ⎕NA'P  ',l,'|libssh2_scp_recv&                       P <0C P'
+            ⎕NA'P  ',l,'|libssh2_scp_recv2&                      P <0C P'
             ⎕NA'P  ',l,'|libssh2_scp_send64&                     P <0C I U8 P P'
             ⎕NA'P  ',l,'|libssh2_session_abstract                P'
 
