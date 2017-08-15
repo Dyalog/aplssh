@@ -51,11 +51,18 @@
         AI_V4MAPPED←8
         AI_CANONNAME←2
         AI_PASSIVE←1
+        
+        NI_NUMERICSERV←2
 
         SOCK_STREAM←1
         SOCK_DGRAM←2
         SOCK_RAW←3
         SOCK_SEQPACKET←5
+
+        SOL_SOCKET←1
+        SO_REUSEADDR←2
+        
+        POLLIN←1
     :EndNamespace
 
     init←0
@@ -94,6 +101,10 @@
         ⎕NA'I ',socklib,'|getaddrinfo <0C <0C P >P'
         ⎕NA'  ',socklib,'|freeaddrinfo P'
         'getaddrinfo_p'⎕NA'I ',socklib,'|getaddrinfo P <0C P >P'
+        
+        ⍝ gethostinfo
+        ⎕NA'I ',socklib,'|getnameinfo P U >0C U >0C U I'
+        
 
         init←1
     ∇
@@ -138,9 +149,19 @@
         Err←UnixErrors
     ∇
 
+    ⍝ Get host and port, given sockaddr
+    ∇ (host port)←GetNameInfo addrblk;p;psz;r;host;port
+        p←(psz←255)/' '
+        r host port←#.Sock.getnameinfo addrblk.Ref addrblk.Size p psz p psz #.Sock.Cnst.NI_NUMERICSERV
+        :If r≠0
+            ⎕SIGNAL('EN'SOCK_ERR)('Message' ('getnameinfo: ',⍕r))
+        :EndIf
+    ∇
+        
+        
+    
     ⍝ Get address info
     ⍝ Arguments: <family> GetAddrInfo host port 
-
     ∇ r←{family} GetAddrInfo args;host;port;pasv;hints;rt;ptr;ai;numf;sz;blk;sptr;canon
         host port←args[1 2]
         pasv←0
@@ -213,12 +234,69 @@
 
     ∇
 
+    ⍝ Wrapper around 'poll'.
+    :Class Poller
+        :Field Private socks←⍬
+        :Field Private evts←⍬
+        :Field Private revts←⍬
+        
+        ∇init
+            :Access Public
+            :Implements Constructor
+        ∇
+        
+        ⍝ register a socket to poll for events
+        ∇sevts Register sock
+            :Access Public
+            :If sock∊socks
+                ⍝ already have it
+                'Socket already registered.'⎕SIGNAL 11
+                →0
+            :EndIf
+            socks ,← sock
+            evts ,← sevts
+            revts ,← 0
+        ∇
+        
+        ⍝ deregister a socket
+        ∇Unregister sock;keep
+            :Access Public
+            :If ~sock∊socks
+                ⍝ don't have it
+                'Socket not registered.'⎕SIGNAL 11
+                →0
+            :EndIf
+            keep←socks≠sock
+            socks/⍨←keep
+            evts/⍨←keep
+            revts/⍨←keep
+        ∇
+        
+        ⍝ Poll, return sockets for which events have occurred
+        ∇s←Poll timeout;fds;r;rstruct;rfds;r_evts;r_revts
+            :Access Public
+            ⍝ make polling datastructure
+            fds←↓⍉↑(socks.FD) evts revts
+            r rstruct←#.Sock.poll fds (≢fds) timeout
+            :If r=¯1
+                ⎕SIGNAL⊂('EN'#.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))
+            :EndIf
+            
+            rfds r_evts r_revts←↓⍉↑rstruct
+            revts←r_revts
+            
+            ⍝ select those sockets that had events
+            s←(revts≠0)/socks
+        ∇   
+    :EndClass
+    
     ⍝ IPV4 socket.
     :Class Socket
         :Field Private fd←¯1
         :Field Private fam
         :Field Private type
         :Field Private shouldClose←0
+        :Field Private origAddr←⍬
 
         bin←{2⊥⍺⍺/2⊥⍣¯1⊢(⍺⍺/⍬),⍵}
 
@@ -232,9 +310,10 @@
 
             fd←#.Sock.socket fam type 0
             :If fd=¯1
-                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))
             :EndIf
         ∇
+
 
         ⍝ Initializer to pass a socket FD into
         ∇init_sock (addrblk fd_)
@@ -242,6 +321,19 @@
             :Implements Constructor
             fd←fd_
             shouldClose←1
+            origAddr←addrblk
+        ∇
+        
+        ⍝ Return the originating host and port if this socket came from 'listen'
+        ∇(host port)←ListenConnection;h;p;sin_addr
+            :Access Public
+            :If origAddr≡⍬
+                host port←'' 0
+                :Return
+            :EndIf
+            
+            host port←#.Sock.GetNameInfo origAddr
+            
         ∇
 
         ∇destroy
@@ -251,6 +343,12 @@
             →(fd=¯1)/0
             →(~shouldClose)/0
             Close
+        ∇
+
+        ⍝ Set an integer socket option
+        ∇setsockopt_int (level option value)
+            :Access Public
+            {}#.Sock.setsockopt_int fd level option value 4
         ∇
 
         ⍝ Close the socket
@@ -290,7 +388,7 @@
             rt←fn fd blk.Ref blk.Size
 
             :If rt≠0
-                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))
             :EndIf
 
             shouldClose←1           
@@ -308,7 +406,7 @@
             :Access Public
             r←#.Sock.listen fd backlog
             :If r=¯1
-                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))
             :EndIf
         ∇
 
@@ -319,7 +417,7 @@
             addrblk←⎕NEW #.CInterop.DataBlock (256/0) ⍝ 256 bytes ought to be enough for anyone
             rt sz←#.Sock.accept fd addrblk.Ref 256
             :If rt=¯1
-                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))
             :EndIf 
 
             ⍝ we're still here, so I guess we can make a new socket
@@ -333,7 +431,7 @@
         ∇
 
         ⍝ Send some data via the socket (bytes, numeric)
-        ∇{flags} Send data;r
+        ∇r←{flags} Send data;r
             :Access Public
             ⍝ no flags → 0
             :If 0=⎕NC'flags' ⋄ flags←0 ⋄ :EndIf
@@ -343,8 +441,8 @@
 
             r←#.Sock.send fd data (≢data) flags
 
-            :If r≠≢data
-                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))                
+            :If r<0
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))                
             :EndIf
         ∇
 
@@ -360,13 +458,54 @@
             r data←#.Sock.recv fd (size/0) size flags
 
             :If r=¯1
-                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕geterrno))                  
+                ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))                  
             :EndIf
             data←r↑data
         ∇
 
     :EndClass
 
+    :Class sockaddr_in :#.CInterop.Struct
+        :Field Private STRUCT←'I2 U2 U4 U8'
+        :Field Private state←(0 0 0 0)
+        ∇init;struct
+            :Access Public
+            :Implements Constructor :Base STRUCT
+        ∇
+        
+        ∇init_mem addr;struct
+            :Access Public
+            :Implements Constructor :Base (STRUCT addr)
+        ∇
+        
+        :Section Fields
+            :Property sin_family
+                ∇r←get
+                    state←Read ⋄ r←state[1]
+                ∇
+                ∇set v
+                    state[1]←v.NewValue ⋄ Write state
+                ∇
+            :EndProperty
+            :Property sin_port
+                ∇r←get
+                    state←Read ⋄ r←state[2]
+                ∇
+                ∇set v
+                    state[2]←v.NewValue ⋄ Write state
+                ∇
+            :EndProperty
+            :Property sin_addr
+                ∇r←get
+                    state←Read ⋄ r←state[3]
+                ∇
+                ∇set v
+                    state[3]←v.NewValue ⋄ Write state
+                ∇
+            :EndProperty
+        :EndSection
+    :EndClass
+    
     :Class addrinfo :#.CInterop.Struct
         ⍝  this field is only there for alignment on 64-bit
         ⍝                                     \
