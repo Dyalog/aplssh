@@ -103,7 +103,7 @@
         'getaddrinfo_p'⎕NA'I ',socklib,'|getaddrinfo P <0C P >P'
         
         ⍝ gethostinfo
-        ⎕NA'I ',socklib,'|getnameinfo P U >0C U >0C U I'
+        ⎕NA'I ',socklib,'|getnameinfo P U =0C U =0C U I'
         
 
         init←1

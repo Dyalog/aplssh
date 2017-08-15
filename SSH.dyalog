@@ -35,18 +35,18 @@
         defaults←{
             (≢⍺)↑⍵,(≢⍵)↓⍺
         }
-        
+
         ∇r←Ref
             :Access Public
             r←session
         ∇
-        
+
         ∇destroy
             :Implements Destructor
             →(session=0)/0
             Disconnect S.SSH_DISCONNECT_BY_APPLICATION 'Session destructor called'
         ∇
-        
+
         ∇Disconnect args;reas;desc;lang;localsess
             :Access Public
             →(session=0)/0
@@ -56,7 +56,7 @@
             {}C.libssh2_session_disconnect_ex localsess reas desc lang
             {}C.libssh2_session_free localsess
         ∇
-        
+
         ⍝ common initialization routine
         ∇_init_common
             ⍝ put the namespaces in the shorthand fields
@@ -154,18 +154,18 @@
                 list←(str≠',')⊆str
             :EndIf
         ∇
-        
+
         ⍝Try to authenticate by password
         ∇Userauth_Password (name password);r
             :Access Public
             r←C.libssh2_userauth_password_ex session name (≢name) password (≢password) 0
             ⎕SIGNAL (r≠0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
         ∇
-        
+
         ⍝ Try to authenticate by public key
         ∇Userauth_Publickey (name pubkey privkey pass);r;pkblk;pkptr
             :Access Public
-            
+
             ⍝ 'pubkey' may be zero, and must therefore be passed in as a pointer
             pkptr←0
             :If 0≠≢pubkey
@@ -173,61 +173,71 @@
                 pkblk←⎕NEW #.CInterop.DataBlock (⎕UCS pubkey)
                 pkptr←pkblk.Ref
             :EndIf
-            
+
             r←C.libssh2_userauth_publickey_fromfile_ex session name (≢name) pkptr privkey pass
             ⎕SIGNAL (r≠0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
         ∇
-        
+
         ⍝ See if this session is authenticated. Returns a boolean.
         ∇r←Authenticated
             :Access Public
             r←C.libssh2_userauth_authenticated session
         ∇
-        
+
         ∇r←GetBlocking
             :Access Public
-            r←C.libssh2_get_blocking session
+            r←C.libssh2_session_get_blocking session
         ∇
-        
+
         ∇SetBlocking b
             :Access Public
-            {}C.libssh2_set_blocking session b
+            {}C.libssh2_session_set_blocking session b
         ∇
-        
+
         ⍝ Make a new channel 
         ∇ch←Channel_Direct_TCPIP (desthost destport shost sport)
             :Access Public
-            ch←⎕NEW S.Channel (⎕THIS desthost destport shost sport)
+            ch←⎕NEW S.⍙Channel ⎕THIS
+            ch.start_Direct_TCPIP (desthost destport shost sport)
         ∇
     :EndClass
-    
+
     ⍝ these are instantiated by the Session class
-    :Class Channel
+    :Class ⍙Channel
         :Field Private ptr←0
         :Field Private S
         :Field Private C
         :Field Private session
-        
+
         ∇r←Ref
             :Access Public
             r←ptr
         ∇
-        
+
         ∇init sess
             :Access Public
             :Implements Constructor
-            
+
             S←#.SSH
             C←#.SSH.C
             session←sess
         ∇
         
+        ∇start_Direct_TCPIP (desthost destport shost sport)
+            :Access Public
+            
+            ptr←C.libssh2_channel_direct_tcpip_ex session.Ref desthost destport shost sport
+            :If ptr=0
+                'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
+            :EndIf
+        ∇
+
         ∇destroy
             :Access Private
             :Implements Destructor
             Close
         ∇
-        
+
         ∇Close;localptr
             :Access Public
             →(ptr=0)/0
@@ -235,13 +245,13 @@
             ptr←0
             {}C.libssh2_channel_free ptr
         ∇
-        
+
         ⍝ this is ugly, but I can't guarantee it's initialized otherwise
         ⍝ (no abstract classes apparently)
         ∇Check
             ⎕SIGNAL(ptr=0)/⊂('EN'16)('Message' 'Channel not initialized.')
         ∇
-        
+
         ⍝ ERROR_EAGAIN sets 'again', anything else is considered an error
         ∇(again r)←{stream} Write data;rr
             :Access Public
@@ -251,9 +261,9 @@
             :If (rr<0)∧rr≠S.ERROR_EAGAIN
                 ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
             :EndIf
-            (again r)←(rr=S.ERROR_AGAIN) rr
+            (again r)←(rr=S.ERROR_EAGAIN) rr
         ∇
-        
+
         ∇(again data)←{stream} Read len;rr;d
             :Access Public
             Check
@@ -262,9 +272,9 @@
             :If (rr<0)∧rr≠S.ERROR_EAGAIN
                 ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
             :EndIf
-            (again data)←(rr=S.ERROR_EAGAIN)(rr↑data)
+            (again data)←(rr=S.ERROR_EAGAIN)(rr↑d)
         ∇
-        
+
         ⍝ See if the channel is out of data
         ∇r←EOF
             :Access Public
@@ -272,20 +282,7 @@
             r←C.libssh2_channel_eof ptr
             ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
         ∇
-        
-    :EndClass
-    
-    ⍝ Direct TCPIP
-    :Class Channel_Direct_TCPIP: Channel
-        ∇init (sess desthost destport shost sport)
-            :Access Public
-            :Implements Constructor :Base
-            
-            ptr←C.libssh2_channel_direct_tcpip_ex sess.Ref desthost destport shost sport
-            :If ptr=0
-                'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
-            :EndIf
-        ∇
+
     :EndClass
 
     :Section Constants
@@ -293,9 +290,9 @@
 
         HOSTKEY_HASH_MD5  ← 1
         HOSTKEY_HASH_SHA1 ← 2
-        
+
         ERROR_EAGAIN      ← ¯37
-        
+
         SSH_DISCONNECT_BY_APPLICATION ← 11
 
     :EndSection
