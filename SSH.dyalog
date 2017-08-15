@@ -110,8 +110,9 @@
             sz←0
 
             ⍝ support string input
-            :If 'md5'≡819⌶type  ⋄ type←S.HOSTKEY_HASH_MD5  ⋄ :EndIf
-            :If 'sha1'≡819⌶type ⋄ type←S.HOSTKEY_HASH_SHA1 ⋄ :EndIf
+            :If     'md5'≡819⌶type  ⋄ type←S.HOSTKEY_HASH_MD5 
+            :ElseIf 'sha1'≡819⌶type ⋄ type←S.HOSTKEY_HASH_SHA1 
+            :EndIf
 
             ⍝ get the size (as defined in the documentation)
             :If type≡S.HOSTKEY_HASH_MD5  ⋄ sz←16 ⋄ :EndIf
@@ -199,6 +200,14 @@
             {}C.libssh2_session_set_blocking session b
         ∇
 
+        ⍝ Make a new session channel
+        ∇ch←Channel_Open_Session;lch
+            :Access Public
+            lch←⎕NEW S.⍙Channel ⎕THIS
+            lch._start_open_session
+            ch←lch
+        ∇
+        
         ⍝ Make a new channel 
         ∇ch←Channel_Direct_TCPIP (desthost destport shost sport);lch
             :Access Public
@@ -266,6 +275,27 @@
                 chan.WaitEOF
                 chan.WaitClosed
             ∇
+            
+            ⍝ Run a command, wait for it to finish.
+            ∇{rslt}←Exec cmd;chan;stdout;agn;status
+                :Access Public
+                
+                ⍝ start a new channel to run our command on
+                chan←Channel_Open_Session
+                chan.Exec cmd
+                
+                ⍝ blocking read
+                stdout←chan.ReadAll
+                
+                ⍝ we should now be done, so close the channel and retrieve the exit status
+                :Repeat
+                    agn←chan.Close
+                :Until ~agn
+                
+                status←chan.ExitStatus
+                
+                rslt←status stdout
+            ∇
         :EndSection
             
     :EndClass
@@ -277,6 +307,23 @@
         :Field Private C
         :Field Private session
 
+        :Section Convenience
+            ⍝ read the whole channel, up to the end
+            ∇data←ReadAll;agn;d;BLOCKSZ
+                :Access Public
+                BLOCKSZ←8192
+                
+                data←⍬
+                
+                :Repeat
+                    agn d←Read BLOCKSZ
+                    :If agn ⋄ :Continue ⋄ :EndIf
+                    data,←d
+                :Until 0=≢d
+            ∇
+            
+        :EndSection
+        
         ∇r←Ref
             :Access Public
             r←ptr
@@ -289,6 +336,41 @@
             S←#.SSH
             C←#.SSH.C
             session←sess
+        ∇
+        
+        ⍝ Execute a command on this channel
+        ∇{agn}←Exec cmdline;r
+            :Access Public
+            Check
+            agn←0
+            r←C.libssh2_channel_process_startup ptr 'exec' 4 cmdline (≢cmdline)
+            
+            :If r<0
+                :If r=S.ERROR_EAGAIN
+                    agn←1
+                :Else
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                :EndIf
+            :EndIf 
+        ∇
+        
+        ⍝ get the exit status
+        ∇status←ExitStatus
+            :Access Public
+            Check
+            
+            status←C.libssh2_channel_get_exit_status ptr
+        ∇
+        
+        ⍝ channel_open_session
+        ∇_start_open_session 
+            :Access Public
+            
+            ptr←C.libssh2_channel_open_ex session.Ref 'session' 7 S.CHANNEL_WINDOW_DEFAULT S.CHANNEL_PACKET_DEFAULT '' 0
+            
+            :If ptr=0
+                'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
+            :EndIf
         ∇
         
         ⍝ start a direct TCPIP channel
@@ -323,15 +405,28 @@
         ∇destroy
             :Access Private
             :Implements Destructor
-            Close
+            Free
         ∇
 
-        ∇Close;localptr
+        ∇Free;localptr
             :Access Public
             →(ptr=0)/0
             localptr←ptr
             ptr←0
             {}C.libssh2_channel_free ptr
+        ∇
+        
+        ⍝ Close the channel
+        ∇{agn}←Close;r
+            :Access Public
+            
+            agn←0
+            r←C.libssh2_channel_close ptr
+            :If r=S.ERROR_EAGAIN
+                agn←1
+            :ElseIf r<0
+                ⎕SIGNAL ⊂('EN'S.SSH_ERR)('Message' (⍕r))
+            :EndIf
         ∇
 
         ⍝ this is ugly, but I can't guarantee it's initialized otherwise
@@ -428,6 +523,9 @@
         ERROR_EAGAIN      ← ¯37
 
         SSH_DISCONNECT_BY_APPLICATION ← 11
+        
+        CHANNEL_WINDOW_DEFAULT ← 2*21
+        CHANNEL_PACKET_DEFAULT ← 32768
 
     :EndSection
     ⍝ Low-level C functions
