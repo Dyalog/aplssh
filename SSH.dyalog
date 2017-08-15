@@ -36,6 +36,7 @@
         :Field Private session←0
         :Field Private socket←⍬ ⍝ socket associated with the session, if there is one
 
+        ⍝ Fill in arguments with default values.
         defaults←{
             (≢⍺)↑⍵,(≢⍵)↓⍺
         }
@@ -215,9 +216,22 @@
             ch←lch
         ∇
         
+        ⍝ Start an SCP upload
+        ∇ch←SCP_Send args;path;mode;size;mtime;atime;lch
+            :Access Public
+            'Path, mode, size are mandatory.'⎕SIGNAL(3>≢args)/6
+            path mode size←args[⍳3]
+            mtime atime←3↓5↑args,0,0
+            lch←⎕NEW S.⍙Channel ⎕THIS
+            lch._start_scp_send (path mode size mtime atime)
+            ch←lch
+        ∇
+        
         :Section Convenience
-            ⍝ Read a file over SCP, in one go, even if the connection is non-blocking.
-            ∇(data stat)←ReadFile path;chan;size;amt;agn;d
+            ⍝ Read a file over SCP, in one go.
+            ∇(stat data)←ReadFile path;chan;size;amt;agn;d
+                :Access Public
+                
                 chan stat←SCP_Recv path
                 data←⍬
                 size←⊃stat
@@ -227,6 +241,30 @@
                     :If agn ⋄ :Continue ⋄ :EndIf
                     data,←d
                 :EndWhile
+            ∇
+            
+            ⍝ Write data into an SCP file, in one go.
+            ⍝ Right arg: path and data
+            ⍝ Optional left arg: mode, mtime, atime
+            ∇{opts}←WriteFile (path data);mode;size;mtime;atime;chan;agn;wr
+                :Access Public
+                :If 0=⎕NC'opts' ⋄ opts←⍬ ⋄ :EndIf
+                
+                mode mtime atime←((8⊥6 4 4)0 0)defaults opts
+                size←≢data
+                
+                ⍝ send the file
+                chan←SCP_Send (path mode (≢data) mtime atime)
+                :While 0<≢data
+                    agn wr←chan.Write data
+                    :If agn ⋄ :Continue ⋄ :EndIf
+                    data↓⍨←wr
+                :EndWhile
+                
+                ⍝ send an EOF and wait for the other side to acknowledge it
+                chan.SendEOF
+                chan.WaitEOF
+                chan.WaitClosed
             ∇
         :EndSection
             
@@ -268,6 +306,15 @@
             :Access Public
             statblk←⎕NEW #.CInterop.DataBlock (256/0)
             ptr←C.libssh2_scp_recv2 session.Ref path statblk.Ref
+            :If ptr=0
+                'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
+            :EndIf
+        ∇
+        
+        ⍝ start a channel to send a file via SCP
+        ∇_start_scp_send (path mode size mtime atime)
+            :Access Public
+            ptr←C.libssh2_scp_send64 session.Ref path mode size mtime atime
             :If ptr=0
                 'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
             :EndIf
@@ -323,7 +370,53 @@
             r←C.libssh2_channel_eof ptr
             ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
         ∇
-
+        
+        ⍝ Send EOF. 
+        ∇{agn}←SendEOF;r
+            :Access Public
+            Check
+            agn←0
+            r←C.libssh2_channel_send_eof ptr
+            :If r<0
+                :If r=S.ERROR_EAGAIN
+                    agn←1
+                :Else
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                :EndIf
+            :EndIf
+        ∇
+        
+        ⍝ Wait for EOF.
+        ∇{agn}←WaitEOF;r
+            :Access Public
+            Check
+            agn←0
+            r←C.libssh2_channel_wait_eof ptr
+            :If r<0
+                :If r=S.ERROR_EAGAIN
+                    agn←1
+                :Else
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                :EndIf
+            :EndIf
+        ∇
+        
+        ⍝ Wait for the remote side to close the channel
+        ∇{agn}←WaitClosed;r
+            :Access Public
+            Check
+            agn←0
+            r←C.libssh2_channel_wait_closed ptr
+            :If r<0
+                :If r=S.ERROR_EAGAIN
+                    agn←1
+                :Else
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                :EndIf
+            :EndIf
+        ∇
+               
+        
     :EndClass
 
     :Section Constants
