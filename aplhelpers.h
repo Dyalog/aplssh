@@ -11,17 +11,26 @@
 #include <libssh2.h>
 #include <stdlib.h>
 
+#include <sys/types.h>
+
 #ifdef _WIN32
     // allow building on Windows
     #define ADDAPI __declspec(dllexport)
     #define ADDCALL __cdecl
+    
+    // Windows socket imports 
+    #include <winsock2.h>
+    #include <mswsock.h>
+    
+    #ifndef EAI_NONAME 
+        #define EAI_NONAME WSAHOST_NOT_FOUND
+    #endif 
 #else
     // Unix socket imports
-    #include <sys/types.h>
     #include <sys/socket.h>
     #include <netdb.h>
 
-    // Unix doesn't need thes
+    // Unix doesn't need these
     #define ADDAPI
     #define ADDCALL
 #endif

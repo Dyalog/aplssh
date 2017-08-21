@@ -1,3 +1,6 @@
 aplcore
 .*.sw?
 aplhelpers_test
+*.lib
+*.obj
+*.exp

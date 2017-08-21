@@ -64,6 +64,29 @@
         SO_REUSEADDR←2
 
         POLLIN←1
+    :EndNamespace       
+    
+    :Namespace WindowsConstants
+        AF_UNSPEC←0
+        AF_INET←2
+        AF_INET6←23
+
+        AI_ADDRCONFIG←1024
+        AI_V4MAPPED←2048
+        AI_CANONNAME←2
+        AI_PASSIVE←1
+        
+        NI_NUMERICSERV←8
+
+        SOCK_STREAM←1
+        SOCK_DGRAM←2
+        SOCK_RAW←3
+        SOCK_SEQPACKET←5
+
+        SOL_SOCKET←65535
+        SO_REUSEADDR←4
+        
+        POLLIN←768
     :EndNamespace
 
     init←0
@@ -93,8 +116,7 @@
         ⎕NA'I ',socklib,'|send I <U1[] P I'
         ⎕NA'I ',socklib,'|recv I =U1[] P I'
         ⍝⍝⍝ close is OS-specific ⍝⍝⍝
-
-        ⎕NA'I ',socklib,'|poll ={I U2 U2} I I'
+        ⍝⍝⍝ poll is OS-specific ⍝⍝⍝
         ⎕NA'I ',socklib,'|getsockopt I I I P =U'
         ⎕NA'I ',socklib,'|setsockopt I I I P U'
 
@@ -119,7 +141,10 @@
         socklib←#.CInterop.LibC
 
         ⍝ closing a socket is done using 'close'
-        ⎕NA'I ',socklib,'|close I'
+        ⎕NA'I ',socklib,'|close I'   
+        
+        ⍝ polling is done using 'poll'
+        ⎕NA'I ',socklib,'|poll ={I U2 U2} I I'
 
         ⍝ geterrno is supplied by dyalib
         ⎕NA'I ',#.NonWindows.dyalib,'geterrno'
@@ -137,7 +162,10 @@
         'close'⎕NA'I ',socklib,'|closesocket P'
 
         ⍝ geterrno is supplied (as WSAGetLastError) by the socket library
-        'geterrno'⎕NA'I ',socklib,'|WSAGetLastError'
+        'geterrno'⎕NA'I ',socklib,'|WSAGetLastError'      
+        
+        ⍝ polling is done using 'WSAPoll'
+        'poll'⎕NA'I ',socklib,'|WSAPoll ={I U2 U2} I I'
 
         ⍝ furthermore, we need to call WSAStartup to get the sockets to work
         ⍝ we don't really need anything from wsadata.
@@ -153,6 +181,7 @@
 
 
         Err←UnixErrors
+        Cnst←WindowsConstants
     ∇
 
     ⍝ Get host and port, given sockaddr
