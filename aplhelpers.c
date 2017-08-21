@@ -15,6 +15,12 @@ int32_t  ADDCALL stat_mode(libssh2_struct_stat *s) { return s->st_mode; }
 int64_t  ADDCALL stat_atime(libssh2_struct_stat *s) { return s->st_atime; }
 int64_t  ADDCALL stat_mtime(libssh2_struct_stat *s) { return s->st_mtime; }
 
+// access libssh2_knownhost fields
+uint32_t ADDCALL knownhost_magic(struct libssh2_knownhost *k) { return k->magic; }
+void*    ADDCALL knownhost_node(struct libssh2_knownhost *k) { return k->node; }
+char*    ADDCALL knownhost_name(struct libssh2_knownhost *k) { return k->name; }
+char*    ADDCALL knownhost_key(struct libssh2_knownhost *k) { return k->key; }
+int32_t  ADDCALL knownhost_typemask(struct libssh2_knownhost *k) { return k->typemask; }
 
 // getaddrinfo fields
 int32_t ADDCALL apl_addr_family(struct apl_addr *r) { return r->family; }

@@ -43,6 +43,15 @@ ADDAPI int32_t   ADDCALL stat_mode(libssh2_struct_stat *s);
 ADDAPI int64_t   ADDCALL stat_atime(libssh2_struct_stat *s);
 ADDAPI int64_t   ADDCALL stat_mtime(libssh2_struct_stat *s);
 
+// access libssh2_knownhost fields
+ADDAPI uint32_t  ADDCALL knownhost_magic(struct libssh2_knownhost *k);
+ADDAPI void*     ADDCALL knownhost_node(struct libssh2_knownhost *k);
+ADDAPI char*     ADDCALL knownhost_name(struct libssh2_knownhost *k);
+ADDAPI char*     ADDCALL knownhost_key(struct libssh2_knownhost *k);
+ADDAPI int32_t   ADDCALL knownhost_typemask(struct libssh2_knownhost *k);
+
+
+
 // getaddrinfo wrapper with fixed-size arguments
 #define CANONNAME_LEN 256
 struct apl_addr {

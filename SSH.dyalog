@@ -7,6 +7,9 @@
 
     SSH_ERR←801 ⍝ signaled when there's something wrong with the SSH library
 
+    ⍝ convert binary functions to bitwise ones
+    bin←{2⊥⍺⍺/2⊥⍣¯1⊢(⍺⍺/⍬),⍵}
+
     init←0
     ∇ Init;r
         →init/0 ⍝ don't initialize twice
@@ -40,12 +43,12 @@
         defaults←{
             (≢⍺)↑⍵,(≢⍵)↓⍺
         }
-        
+
         ⍝ Make an error message
         ∇r←EMSG
             r←⍕LastError
         ∇
-        
+
         ∇r←Ref
             :Access Public
             r←session
@@ -106,6 +109,17 @@
             r←C.libssh2_session_handshake session sock.FD
             ⎕SIGNAL(r≠0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
             socket←sock
+        ∇
+        
+        ⍝ Get the current host key
+        ∇(key type)←Hostkey;len;p;blk
+            :Access Public
+            p len type←C.libssh2_session_hostkey session 0 0
+            ⎕SIGNAL(p=0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
+            ⍝ I'm assuming "len" is given for a reason, so let's make sure not to read past it
+            blk←⎕NEW #.CInterop.DataBlock (len/0)
+            blk.Load p len
+            key←blk
         ∇
 
         ⍝ Get the hostkey hash, as a byte vector
@@ -340,7 +354,7 @@
         ∇r←EMSG
             r←⍕session.LastError
         ∇
-        
+
         ∇r←Ref
             :Access Public
             r←ptr
@@ -531,11 +545,128 @@
 
     :EndClass
 
+    ⍝ read and write a known hosts file
+    :Class KnownHosts
+        :Field Private session
+        :Field Private S
+        :Field Private C
+
+        :Field Private ptr
+
+        ⍝ Make an error message to throw
+        ∇r←EMSG
+            r←⍕session.LastError
+        ∇
+
+        ⍝ initialize 
+        ∇init sess
+            :Access Public
+            :Implements Constructor
+            session←sess
+
+            ⍝ shortcuts
+            S←#.SSH
+            C←#.SSH.C
+
+            ptr←C.libssh2_knownhosts_init session.Ref
+            ⎕SIGNAL(ptr=0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
+        ∇
+
+        ⍝ free
+        ∇destroy;localptr
+            :Access Private
+            :Implements Destructor
+            localptr←ptr
+            ptr←0
+            {}C.libssh2_knownhosts_free localptr
+        ∇
+
+        ⍝ load entries from a file
+        ⍝ shy result is amount of entries read 
+        ∇{n}←ReadFile filename
+            :Access Public
+            ⍝ type is 1 (LIBSSH2_KNOWNHOST_FILE_OPENSSH), the only supported format
+
+            n←C.libssh2_knownhost_readfile ptr filename 1
+            ⎕SIGNAL(n<0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
+        ∇
+
+        ⍝ write entries to a file
+        ∇WriteFile filename;r
+            :Access Public
+            ⍝ type is 1 (LIBSSH2_KNOWNHOST_FILE_OPENSSH), the only supported format
+            r←C.libssh2_knownhost_writefile ptr filename 1
+            ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
+        ∇
+
+        ⍝ check if a host+key is in the collection
+        ∇(ok status)←Check (host key typemask);r
+            :Access Public
+            typemask←S.bin∨typemask
+            status←C.libssh2_knownhost_check ptr host key (≢key) typemask 0
+            ok←status=0
+        ∇
+
+        ⍝ add a host to the store
+        ∇Add (host salt key comment typemask);r
+            :Access Public
+            typemask←S.bin∨typemask
+            r←C.libssh2_knownhost_addc ptr host salt key (≢key) comment (≢comment) typemask 0
+            ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
+        ∇
+
+
+        ⍝ retrieve all known hosts
+        ∇hosts←Hosts;r;prev;blk
+            :Access Public
+            hosts←⍬
+            
+            prev←0
+            r←0
+            :Repeat
+                r prev←C.libssh2_knownhosts_get ptr 0 prev
+                :If r<0 ⋄ ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG) ⋄ :EndIf
+                
+                hosts,←⊂#.SSH_C_Helpers.knownhost prev
+            :Until r=1
+        ∇
+        
+        ⍝ delete a host with a given hostname
+        ∇Delete delname;r;prev;name
+            :Access Public
+            r←0
+            prev←0
+            :Repeat
+                r prev←C.libssh2_knownhosts_get ptr 0 prev
+                :If r<0 ⋄ ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG) ⋄ :EndIf
+                name←3⊃#.SSH_C_Helpers.knownhost prev
+                :If name≡delname
+                    ⍝ delete this one
+                    r←C.libssh2_knownhost_del ptr prev
+                    ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
+                    :Leave
+                :EndIf
+            :Until r=1
+        ∇
+    :EndClass
+
     :Section Constants
         ⍝ The constants are named as in the C include files, but without the LIBSSH2_ prefix.
 
         HOSTKEY_HASH_MD5  ← 1
         HOSTKEY_HASH_SHA1 ← 2
+
+        KNOWNHOST_TYPE_PLAIN  ← 1
+        KNOWNHOST_TYPE_SHA1   ← 2
+        KNOWNHOST_TYPE_CUSTOM ← 3
+
+        KNOWNHOST_KEYENC_RAW    ← 0 65535⊥1
+        KNOWNHOST_KEYENC_BASE64 ← 0 65535⊥2
+
+        KNOWNHOST_CHECK_MATCH    ← 0
+        KNOWNHOST_CHECK_MISMATCH ← 1
+        KNOWNHOST_CHECK_NOTFOUND ← 2
+        KNOWNHOST_CHECK_FAILURE  ← 3
 
         ERROR_SOCKET_NONE            ← ¯1
         ERROR_BANNER_RECV            ← ¯2
@@ -665,10 +796,10 @@
             ⎕NA'   ',l,'|libssh2_keepalive_config                P I U'
             ⎕NA'   ',l,'|libssh2_keepalive_send                  P >I'
             ⎕NA'I  ',l,'|libssh2_knownhost_addc                  P <0C <0C <0C P <0C P I P'
-            ⎕NA'I  ',l,'|libssh2_knownhost_checkp                P <0C I <0C P I P'
+            ⎕NA'I  ',l,'|libssh2_knownhost_check                 P <0C <0C P I P'
             ⎕NA'I  ',l,'|libssh2_knownhost_del                   P P'
             ⎕NA'   ',l,'|libssh2_knownhost_free                  P'
-            ⎕NA'I  ',l,'|libssh2_knownhost_get                   P P P'
+            ⎕NA'I  ',l,'|libssh2_knownhost_get                   P >P P'
             ⎕NA'I  ',l,'|libssh2_knownhost_init                  P'
             ⎕NA'I  ',l,'|libssh2_knownhost_readfile              P <0C I'
             ⎕NA'I  ',l,'|libssh2_knownhost_readline              P <0C P I'

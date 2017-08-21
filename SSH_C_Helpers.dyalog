@@ -46,6 +46,14 @@
         ⎕NA'I4 ',path,'|stat_mode P'
         ⎕NA'I8 ',path,'|stat_atime P'
         ⎕NA'I8 ',path,'|stat_mtime P'
+        
+        ⍝⍝⍝ knownhosts
+        ⎕NA'U4 ',path,'|knownhost_magic P'
+        ⎕NA'P  ',path,'|knownhost_node P'
+        ⎕NA'P  ',path,'|knownhost_name P'
+        ⎕NA'P  ',path,'|knownhost_key P'
+        ⎕NA'I4 ',path,'|knownhost_typemask P'
+        
 
         ⍝⍝ deal with getaddrinfo with wrappers
         ⎕NA'I4 ',path,'|apl_getaddrinfo I4 <0C <0C U1 >P'
@@ -60,6 +68,13 @@
         init←1
     ∇
 
+    ⍝ Read a C string at a given address, but give the empty string if
+    ⍝ a null pointer is given.
+    ∇ r←str ptr
+        r←'' ⋄ →(ptr=0)/0
+        r←#.CInterop.ReadCStr ptr
+    ∇
+    
     ⍝ Decode a 'stat' structure
     ⍝ giving (size, mode, atime, mtime)
     ∇ (size mode atime mtime)←stat statblk
@@ -68,13 +83,23 @@
         atime←stat_atime statblk.Ref
         mtime←stat_mtime statblk.Ref
     ∇
+    
+    ⍝ knownhosts
+    ∇ (magic node name key typemask)←knownhost ref;sptr
+        magic←knownhost_magic ref
+        node←knownhost_node ref
+        name←str knownhost_name ref
+        key←str knownhost_key ref
+        typemask←knownhost_typemask ref
+    ∇
+        
 
     ⍝⍝ Decode an 'apl_addr' structure
     ∇ (fam type len name sa next)←apl_addr ref
         fam←apl_addr_family ref
         type←apl_addr_socktype ref 
         len←apl_addr_addrlen ref
-        name←#.CInterop.ReadCStr apl_addr_canonname ref
+        name←str apl_addr_canonname ref
         sa←apl_addr_sockaddr ref
         next←apl_addr_next ref
     ∇
