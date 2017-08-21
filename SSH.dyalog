@@ -1,5 +1,5 @@
 ﻿⍝∇:require =/CInterop.dyalog
-⍝∇:require =/SSHStruct.dyalog
+⍝∇:require =/SSH_C_Helpers.dyalog
 ⍝∇:require =/Sock.dyalog
 
 :Namespace SSH
