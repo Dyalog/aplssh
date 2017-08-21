@@ -173,7 +173,7 @@
 
         ⎕NA'I ',socklib,'|WSAStartup U2 P'
         wsaversion←256⊥2 2 ⍝ version 2.2
-        wsadata←⎕NEW #.CInterop.DataBlock (32/0) ⍝ 32 bytes is more than enough for anyone
+        wsadata←⎕NEW #.CInterop.DataBlock (256/0)
         r←WSAStartup wsaversion wsadata.Ref
         :If r≠0
             ⎕SIGNAL ⊂('EN'SOCK_ERR)('Message' ('Winsock initialization failed: ',⍕r))

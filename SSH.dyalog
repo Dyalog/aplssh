@@ -182,6 +182,13 @@
 
             r←C.libssh2_userauth_publickey_fromfile_ex session name (≢name) pkptr privkey pass
             ⎕SIGNAL (r≠0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
+        ∇              
+        
+        ⍝ Return the last error, as a string.
+        ∇(num msg)←LastError;msgp;msgl
+            :Access Public
+            num msgp msgl←C.libssh2_session_last_error session 0 0 0
+            msg←#.CInterop.ReadCStr msgp
         ∇
 
         ⍝ See if this session is authenticated. Returns a boolean.
@@ -221,7 +228,7 @@
             :Access Public
             lch←⎕NEW S.⍙Channel ⎕THIS
             sb←lch._start_scp_recv path
-            stat←#.SSHStruct.stat sb
+            stat←#.SSH_C_Helpers.stat sb
             ch←lch
         ∇
 
@@ -614,7 +621,7 @@
             ⎕NA'P  ',l,'|libssh2_session_hostkey                 P >P >I'
             ⎕NA'P  ',l,'|libssh2_session_init_ex                 P P P P'
             ⎕NA'I  ',l,'|libssh2_session_last_errno              P'
-            ⎕NA'I  ',l,'|libssh2_session_last_error              P >P <0C I'
+            ⎕NA'I  ',l,'|libssh2_session_last_error              P >P >I I'
             ⎕NA'I  ',l,'|libssh2_session_method_pref             P I <0C'
             ⎕NA'P  ',l,'|libssh2_session_methods                 P I'
             ⎕NA'   ',l,'|libssh2_session_set_blocking            P I'
