@@ -167,22 +167,36 @@
         ⍝ polling is done using 'WSAPoll'
         'poll'⎕NA'I ',socklib,'|WSAPoll ={I U2 U2} I I'
 
-        ⍝ furthermore, we need to call WSAStartup to get the sockets to work
-        ⍝ we don't really need anything from wsadata.
-        ⍝ we _should_ call WSACleanup at some point as well. 
-
-        ⎕NA'I ',socklib,'|WSAStartup U2 P'
-        wsaversion←256⊥2 2 ⍝ version 2.2
-        wsadata←⎕NEW #.CInterop.DataBlock (256/0)
-        r←WSAStartup wsaversion wsadata.Ref
-        :If r≠0
-            ⎕SIGNAL ⊂('EN'SOCK_ERR)('Message' ('Winsock initialization failed: ',⍕r))
-        :EndIf
-
+        ⍝ take care of Winsock initialization and cleanup
+        _winsock←⎕NEW Winsock
 
         Err←UnixErrors
         Cnst←WindowsConstants
     ∇
+             
+    ⍝ This class wraps the Winsock startup and cleanup. An instance of it is put into
+    ⍝ the Sock namespace during initialization, and its destructor is responsible for
+    ⍝ calling WSACleanup.
+    :Class Winsock
+        :Field Public wsaversion←256⊥2 2 ⍝ version 2.2
+        :Field Public wsadata ⍝ if you really feel like poking around in it
+        
+        ∇init;start;r
+            :Implements Constructor
+            :Access Public
+            'start'⎕NA'I Ws2_32.dll|WSAStartup U2 P'
+            wsadata←⎕NEW #.CInterop.DataBlock (256/0) ⍝ 256 bytes ought to be enough for everybody
+            r←start wsaversion wsadata.Ref
+            ⎕SIGNAL(r≠0)/⊂('EN'#.Sock.SOCK_ERR)('Message'('Winsock initialization failed: ',⍕r))
+        ∇
+        
+        ∇destroy;stop;r
+            :Implements Destructor
+            :Access Private
+            'stop'⎕NA'I Ws2_32.dll|WSACleanup'
+            r←stop
+        ∇     
+    :EndClass
 
     ⍝ Get host and port, given sockaddr
     ∇ (host port)←GetNameInfo addrblk;p;psz;r;host;port
