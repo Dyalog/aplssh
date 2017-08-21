@@ -40,7 +40,12 @@
         defaults←{
             (≢⍺)↑⍵,(≢⍵)↓⍺
         }
-
+        
+        ⍝ Make an error message
+        ∇r←EMSG
+            r←⍕LastError
+        ∇
+        
         ∇r←Ref
             :Access Public
             r←session
@@ -74,7 +79,7 @@
             ⍝ make a session
             ⍝ we don't do callbacks into APL, because APL doesn't do callbacks into APL...
             session←C.libssh2_session_init_ex 0 0 0 0
-            ⎕SIGNAL(session=0)/⊂('EN'S.SSH_ERR)('Message' 'libssh2 initialization failed')
+            ⎕SIGNAL(session=0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
         ∇
 
         ⍝ Initialize the session
@@ -99,7 +104,7 @@
         ∇Handshake sock;r
             :Access Public
             r←C.libssh2_session_handshake session sock.FD
-            ⎕SIGNAL(r≠0)/⊂('EN'S.SSH_ERR)('Message' ('Handshake failed:', ⍕r))
+            ⎕SIGNAL(r≠0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
             socket←sock
         ∇
 
@@ -123,7 +128,7 @@
 
             ⍝ ask for the hash type
             ptr←C.libssh2_hostkey_hash session type
-            ⎕SIGNAL(ptr=0)/⊂('EN'S.SSH_ERR)('Message' ('Hostkey hash not available.'))
+            ⎕SIGNAL(ptr=0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
 
             ⍝ reserve some memory to store the hash type
             blk←⎕NEW #.CInterop.DataBlock (sz/0)
@@ -152,7 +157,7 @@
                     list←⍬
                 :Else
                     ⍝ this really is an error
-                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' 'libssh2_userauth_list failed')
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG)
                 :EndIf
             :Else
                 ⍝ we have a pointer to a comma-delimited string
@@ -165,7 +170,7 @@
         ∇Userauth_Password (name password);r
             :Access Public
             r←C.libssh2_userauth_password_ex session name (≢name) password (≢password) 0
-            ⎕SIGNAL (r≠0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
+            ⎕SIGNAL (r≠0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
         ∇
 
         ⍝ Try to authenticate by public key
@@ -181,9 +186,9 @@
             :EndIf
 
             r←C.libssh2_userauth_publickey_fromfile_ex session name (≢name) pkptr privkey pass
-            ⎕SIGNAL (r≠0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
+            ⎕SIGNAL (r≠0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
         ∇              
-        
+
         ⍝ Return the last error, as a string.
         ∇(num msg)←LastError;msgp;msgl
             :Access Public
@@ -331,6 +336,11 @@
 
         :EndSection
 
+        ⍝ Make an error message to throw
+        ∇r←EMSG
+            r←⍕session.LastError
+        ∇
+        
         ∇r←Ref
             :Access Public
             r←ptr
@@ -356,7 +366,7 @@
                 :If r=S.ERROR_EAGAIN
                     agn←1
                 :Else
-                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG)
                 :EndIf
             :EndIf 
         ∇
@@ -432,7 +442,7 @@
             :If r=S.ERROR_EAGAIN
                 agn←1
             :ElseIf r<0
-                ⎕SIGNAL ⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                ⎕SIGNAL ⊂('EN'S.SSH_ERR)('Message' EMSG)
             :EndIf
         ∇
 
@@ -449,7 +459,7 @@
             :If 0=⎕NC'stream' ⋄ stream←0 ⋄ :EndIf
             rr←C.libssh2_channel_write_ex ptr stream data (≢data)
             :If (rr<0)∧rr≠S.ERROR_EAGAIN
-                ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG)
             :EndIf
             (again r)←(rr=S.ERROR_EAGAIN) rr
         ∇
@@ -460,7 +470,7 @@
             :If 0=⎕NC'stream' ⋄ stream←0 ⋄ :EndIf
             rr d←C.libssh2_channel_read_ex ptr stream (len/0) len
             :If (rr<0)∧rr≠S.ERROR_EAGAIN
-                ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG)
             :EndIf
             (again data)←(rr=S.ERROR_EAGAIN)((0⌈rr)↑d)
         ∇
@@ -470,7 +480,7 @@
             :Access Public
             Check
             r←C.libssh2_channel_eof ptr
-            ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
+            ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
         ∇
 
         ⍝ Send EOF. 
@@ -483,7 +493,7 @@
                 :If r=S.ERROR_EAGAIN
                     agn←1
                 :Else
-                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG)
                 :EndIf
             :EndIf
         ∇
@@ -498,7 +508,7 @@
                 :If r=S.ERROR_EAGAIN
                     agn←1
                 :Else
-                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG)
                 :EndIf
             :EndIf
         ∇
@@ -513,7 +523,7 @@
                 :If r=S.ERROR_EAGAIN
                     agn←1
                 :Else
-                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' (⍕r))
+                    ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG)
                 :EndIf
             :EndIf
         ∇
@@ -527,9 +537,71 @@
         HOSTKEY_HASH_MD5  ← 1
         HOSTKEY_HASH_SHA1 ← 2
 
-        ERROR_EAGAIN      ← ¯37
+        ERROR_SOCKET_NONE            ← ¯1
+        ERROR_BANNER_RECV            ← ¯2
+        ERROR_BANNER_SEND            ← ¯3
+        ERROR_INVALID_MAC            ← ¯4
+        ERROR_KEX_FAILURE            ← ¯5
+        ERROR_ALLOC                  ← ¯6
+        ERROR_SOCKET_SEND            ← ¯7
+        ERROR_KEY_EXCHANGE_FAILURE   ← ¯8
+        ERROR_TIMEOUT                ← ¯9
+        ERROR_HOSTKEY_INIT           ← ¯10
+        ERROR_HOSTKEY_SIGN           ← ¯11
+        ERROR_DECRYPT                ← ¯12
+        ERROR_SOCKET_DISCONNECT      ← ¯13
+        ERROR_PROTO                  ← ¯14
+        ERROR_PASSWORD_EXPIRED       ← ¯15
+        ERROR_FILE                   ← ¯16
+        ERROR_METHOD_NONE            ← ¯17
+        ERROR_AUTHENTICATION_FAILED  ← ¯18
+        ERROR_PUBLICKEY_UNRECOGNIZED ← ¯18 ⍝ yes this is correct
+        ERROR_PUBLICKEY_UNVERIFIED   ← ¯19 
+        ERROR_CHANNEL_OUTOFORDER     ← ¯20
+        ERROR_CHANNEL_FAILURE        ← ¯21
+        ERROR_CHANNEL_REQUEST_DENIED ← ¯22
+        ERROR_CHANNEL_UNKNOWN        ← ¯23
+        ERROR_CHANNEL_WINDOW_EXCEEDED← ¯24
+        ERROR_CHANNEL_PACKET_EXCEEDED← ¯25
+        ERROR_CHANNEL_CLOSED         ← ¯26
+        ERROR_CHANNEL_EOF_SENT       ← ¯27
+        ERROR_SCP_PROTOCOL           ← ¯28
+        ERROR_ZLIB                   ← ¯29
+        ERROR_SOCKET_TIMEOUT         ← ¯30
+        ERROR_SFTP_PROTOCOL          ← ¯31
+        ERROR_REQUEST_DENIED         ← ¯32
+        ERROR_METHOD_NOT_SUPPORTED   ← ¯33
+        ERROR_INVAL                  ← ¯34
+        ERROR_INVALID_POLL_TYPE      ← ¯35
+        ERROR_PUBLICKEY_PROTOCOL     ← ¯36
+        ERROR_EAGAIN                 ← ¯37
+        ERROR_BUFFER_TOO_SMALL       ← ¯38
+        ERROR_BAD_USE                ← ¯39
+        ERROR_COMPRESS               ← ¯40
+        ERROR_OUT_OF_BOUNDARY        ← ¯41
+        ERROR_AGENT_PROTOCOL         ← ¯42 
+        ERROR_SOCKET_RECV            ← ¯43
+        ERROR_ENCRYPT                ← ¯44
+        ERROR_BAD_SOCKET             ← ¯45
+        ERROR_KNOWN_HOSTS            ← ¯46
 
-        SSH_DISCONNECT_BY_APPLICATION ← 11
+
+        SSH_DISCONNECT_HOST_NOT_ALLOWED_TO_CONNECT   ← 1
+        SSH_DISCONNECT_PROTOCOL_ERROR                ← 2
+        SSH_DISCONNECT_KEY_EXCHANGE_FAILED           ← 3
+        SSH_DISCONNECT_RESERVED                      ← 4
+        SSH_DISCONNECT_MAC_ERROR                     ← 5
+        SSH_DISCONNECT_COMPRESSION_ERROR             ← 6
+        SSH_DISCONNECT_SERVICE_NOT_AVAILABLE         ← 7
+        SSH_DISCONNECT_PROTOCOL_VERSION_NOT_SUPPORTED← 8
+        SSH_DISCONNECT_HOST_KEY_NOT_VERIFIABLE       ← 9
+        SSH_DISCONNECT_CONNECTION_LOST               ← 10
+        SSH_DISCONNECT_BY_APPLICATION                ← 11
+        SSH_DISCONNECT_TOO_MANY_CONNECTIONS          ← 12
+        SSH_DISCONNECT_AUTH_CANCELLED_BY_USER        ← 13
+        SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE← 14
+        SSH_DISCONNECT_ILLEGAL_USER_NAME             ← 15
+
 
         CHANNEL_WINDOW_DEFAULT ← 2*21
         CHANNEL_PACKET_DEFAULT ← 32768
