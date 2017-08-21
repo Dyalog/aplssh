@@ -10,10 +10,10 @@
     init←0
     ∇ Init;r
         →init/0 ⍝ don't initialize twice
-    
-        ⍝ Make sure the struct helper is initialized
-        #.SSHStruct.Init
-        
+
+        ⍝ Make sure the C helper is initialized
+        #.SSH_C_Helpers.Init
+
         ⍝ Make sure the socket library is initialized
         #.Sock.Init
 
@@ -207,7 +207,7 @@
             lch._start_open_session
             ch←lch
         ∇
-        
+
         ⍝ Make a new channel 
         ∇ch←Channel_Direct_TCPIP (desthost destport shost sport);lch
             :Access Public
@@ -215,7 +215,7 @@
             lch._start_Direct_TCPIP (desthost destport shost sport)
             ch←lch
         ∇
-        
+
         ⍝ Start an SCP transfer
         ∇(ch stat)←SCP_Recv path;lch;sb
             :Access Public
@@ -224,7 +224,7 @@
             stat←#.SSHStruct.stat sb
             ch←lch
         ∇
-        
+
         ⍝ Start an SCP upload
         ∇ch←SCP_Send args;path;mode;size;mtime;atime;lch
             :Access Public
@@ -235,12 +235,12 @@
             lch._start_scp_send (path mode size mtime atime)
             ch←lch
         ∇
-        
+
         :Section Convenience
             ⍝ Read a file over SCP, in one go.
             ∇(stat data)←ReadFile path;chan;size;amt;agn;d
                 :Access Public
-                
+
                 chan stat←SCP_Recv path
                 data←⍬
                 size←⊃stat
@@ -251,17 +251,17 @@
                     data,←d
                 :EndWhile
             ∇
-            
+
             ⍝ Write data into an SCP file, in one go.
             ⍝ Right arg: path and data
             ⍝ Optional left arg: mode, mtime, atime
             ∇{opts}←WriteFile (path data);mode;size;mtime;atime;chan;agn;wr
                 :Access Public
                 :If 0=⎕NC'opts' ⋄ opts←⍬ ⋄ :EndIf
-                
+
                 mode mtime atime←((8⊥6 4 4)0 0)defaults opts
                 size←≢data
-                
+
                 ⍝ send the file
                 chan←SCP_Send (path mode (≢data) mtime atime)
                 :While 0<≢data
@@ -269,35 +269,35 @@
                     :If agn ⋄ :Continue ⋄ :EndIf
                     data↓⍨←wr
                 :EndWhile
-                
+
                 ⍝ send an EOF and wait for the other side to acknowledge it
                 chan.SendEOF
                 chan.WaitEOF
                 chan.WaitClosed
             ∇
-            
+
             ⍝ Run a command, wait for it to finish.
             ∇{rslt}←Exec cmd;chan;stdout;agn;status
                 :Access Public
-                
+
                 ⍝ start a new channel to run our command on
                 chan←Channel_Open_Session
                 chan.Exec cmd
-                
+
                 ⍝ blocking read
                 stdout←chan.ReadAll
-                
+
                 ⍝ we should now be done, so close the channel and retrieve the exit status
                 :Repeat
                     agn←chan.Close
                 :Until ~agn
-                
+
                 status←chan.ExitStatus
-                
+
                 rslt←status stdout
             ∇
         :EndSection
-            
+
     :EndClass
 
     ⍝ these are instantiated by the Session class
@@ -312,18 +312,18 @@
             ∇data←ReadAll;agn;d;BLOCKSZ
                 :Access Public
                 BLOCKSZ←8192
-                
+
                 data←⍬
-                
+
                 :Repeat
                     agn d←Read BLOCKSZ
                     :If agn ⋄ :Continue ⋄ :EndIf
                     data,←d
                 :Until 0=≢d
             ∇
-            
+
         :EndSection
-        
+
         ∇r←Ref
             :Access Public
             r←ptr
@@ -337,14 +337,14 @@
             C←#.SSH.C
             session←sess
         ∇
-        
+
         ⍝ Execute a command on this channel
         ∇{agn}←Exec cmdline;r
             :Access Public
             Check
             agn←0
             r←C.libssh2_channel_process_startup ptr 'exec' 4 cmdline (≢cmdline)
-            
+
             :If r<0
                 :If r=S.ERROR_EAGAIN
                     agn←1
@@ -353,36 +353,36 @@
                 :EndIf
             :EndIf 
         ∇
-        
+
         ⍝ get the exit status
         ∇status←ExitStatus
             :Access Public
             Check
-            
+
             status←C.libssh2_channel_get_exit_status ptr
         ∇
-        
+
         ⍝ channel_open_session
         ∇_start_open_session 
             :Access Public
-            
+
             ptr←C.libssh2_channel_open_ex session.Ref 'session' 7 S.CHANNEL_WINDOW_DEFAULT S.CHANNEL_PACKET_DEFAULT '' 0
-            
+
             :If ptr=0
                 'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
             :EndIf
         ∇
-        
+
         ⍝ start a direct TCPIP channel
         ∇_start_Direct_TCPIP (desthost destport shost sport)
             :Access Public
-            
+
             ptr←C.libssh2_channel_direct_tcpip_ex session.Ref desthost destport shost sport
             :If ptr=0
                 'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
             :EndIf
         ∇
-        
+
         ⍝ start a channel to receive a file via SCP
         ∇statblk←_start_scp_recv path
             :Access Public
@@ -392,7 +392,7 @@
                 'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
             :EndIf
         ∇
-        
+
         ⍝ start a channel to send a file via SCP
         ∇_start_scp_send (path mode size mtime atime)
             :Access Public
@@ -401,7 +401,7 @@
                 'Cannot initialize channel' ⎕SIGNAL S.SSH_ERR
             :EndIf
         ∇
-        
+
         ∇destroy
             :Access Private
             :Implements Destructor
@@ -415,11 +415,11 @@
             ptr←0
             {}C.libssh2_channel_free ptr
         ∇
-        
+
         ⍝ Close the channel
         ∇{agn}←Close;r
             :Access Public
-            
+
             agn←0
             r←C.libssh2_channel_close ptr
             :If r=S.ERROR_EAGAIN
@@ -465,7 +465,7 @@
             r←C.libssh2_channel_eof ptr
             ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' (⍕r))
         ∇
-        
+
         ⍝ Send EOF. 
         ∇{agn}←SendEOF;r
             :Access Public
@@ -480,7 +480,7 @@
                 :EndIf
             :EndIf
         ∇
-        
+
         ⍝ Wait for EOF.
         ∇{agn}←WaitEOF;r
             :Access Public
@@ -495,7 +495,7 @@
                 :EndIf
             :EndIf
         ∇
-        
+
         ⍝ Wait for the remote side to close the channel
         ∇{agn}←WaitClosed;r
             :Access Public
@@ -510,8 +510,8 @@
                 :EndIf
             :EndIf
         ∇
-               
-        
+
+
     :EndClass
 
     :Section Constants
@@ -523,7 +523,7 @@
         ERROR_EAGAIN      ← ¯37
 
         SSH_DISCONNECT_BY_APPLICATION ← 11
-        
+
         CHANNEL_WINDOW_DEFAULT ← 2*21
         CHANNEL_PACKET_DEFAULT ← 32768
 
