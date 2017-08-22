@@ -110,7 +110,7 @@
             ⎕SIGNAL(r≠0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
             socket←sock
         ∇
-        
+
         ⍝ Get the current host key
         ∇(key type)←Hostkey;len;p;blk
             :Access Public
@@ -281,7 +281,7 @@
             ⍝ Write data into an SCP file, in one go.
             ⍝ Right arg: path and data
             ⍝ Optional left arg: mode, mtime, atime
-            ∇{opts}←WriteFile (path data);mode;size;mtime;atime;chan;agn;wr
+            ∇{opts} WriteFile (path data);mode;size;mtime;atime;chan;agn;wr
                 :Access Public
                 :If 0=⎕NC'opts' ⋄ opts←⍬ ⋄ :EndIf
 
@@ -620,17 +620,17 @@
         ∇hosts←Hosts;r;prev;blk
             :Access Public
             hosts←⍬
-            
+
             prev←0
             r←0
             :Repeat
                 r prev←C.libssh2_knownhosts_get ptr 0 prev
                 :If r<0 ⋄ ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG) ⋄ :EndIf
-                
+
                 hosts,←⊂#.SSH_C_Helpers.knownhost prev
             :Until r=1
         ∇
-        
+
         ⍝ delete a host with a given hostname
         ∇Delete delname;r;prev;name
             :Access Public
