@@ -568,7 +568,7 @@
             S←#.SSH
             C←#.SSH.C
 
-            ptr←C.libssh2_knownhosts_init session.Ref
+            ptr←C.libssh2_knownhost_init session.Ref
             ⎕SIGNAL(ptr=0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
         ∇
 
@@ -578,7 +578,7 @@
             :Implements Destructor
             localptr←ptr
             ptr←0
-            {}C.libssh2_knownhosts_free localptr
+            {}C.libssh2_knownhost_free localptr
         ∇
 
         ⍝ load entries from a file
@@ -624,11 +624,11 @@
             prev←0
             r←0
             :Repeat
-                r prev←C.libssh2_knownhosts_get ptr 0 prev
+                r prev←C.libssh2_knownhost_get ptr 0 prev
                 :If r<0 ⋄ ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG) ⋄ :EndIf
-
+                :If r=1 ⋄ :Leave ⋄ :EndIf
                 hosts,←⊂#.SSH_C_Helpers.knownhost prev
-            :Until r=1
+            :EndRepeat
         ∇
 
         ⍝ delete a host with a given hostname
@@ -637,8 +637,9 @@
             r←0
             prev←0
             :Repeat
-                r prev←C.libssh2_knownhosts_get ptr 0 prev
+                r prev←C.libssh2_knownhost_get ptr 0 prev
                 :If r<0 ⋄ ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG) ⋄ :EndIf
+                :If r=1 ⋄ :Leave ⋄ :EndIf
                 name←3⊃#.SSH_C_Helpers.knownhost prev
                 :If name≡delname
                     ⍝ delete this one
@@ -646,7 +647,7 @@
                     ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
                     :Leave
                 :EndIf
-            :Until r=1
+            :EndRepeat
         ∇
     :EndClass
 
