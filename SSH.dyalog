@@ -9,6 +9,21 @@
 
     ⍝ convert binary functions to bitwise ones
     bin←{2⊥⍺⍺/2⊥⍣¯1⊢(⍺⍺/⍬),⍵}
+    
+    ⍝ base64 encode/decode
+    base64enc←{
+        vals←⎕A,819⌶⎕A,⎕D,'+/'
+        bits←,⍉(8/2)⊤,⍵
+        base64←2⊥⍉↑(⎕IO=6|⍳⍴bits)⊂bits
+        vals[⎕IO+base64],((××4-⊢)4|⍴base64)/'='
+    }
+    
+    base64dec←{
+        vals←⎕A,819⌶⎕A,⎕D,'+/'
+        bits←,⍉(6/2)⊤(vals⍳⍵~'=')-⎕IO
+        bits←(⊢↑⍨⍴-8|⍴)bits
+        2⊥⍉↑(⎕IO=8|⍳⍴bits)⊂bits
+    }
 
     init←0
     ∇ Init;r
@@ -119,7 +134,8 @@
             ⍝ I'm assuming "len" is given for a reason, so let's make sure not to read past it
             blk←⎕NEW #.CInterop.DataBlock (len/0)
             blk.Load p len
-            key←blk
+            ⍝ Return the key base64-encoded
+            key←S.base64enc blk.Data
         ∇
 
         ⍝ Get the hostkey hash, as a byte vector
@@ -631,8 +647,8 @@
             :EndRepeat
         ∇
 
-        ⍝ delete a host with a given hostname
-        ∇Delete delname;r;prev;name
+        ⍝ delete a host with a given key
+        ∇Delete delkey;r;prev;key
             :Access Public
             r←0
             prev←0
@@ -640,8 +656,8 @@
                 r prev←C.libssh2_knownhost_get ptr 0 prev
                 :If r<0 ⋄ ⎕SIGNAL⊂('EN'S.SSH_ERR)('Message' EMSG) ⋄ :EndIf
                 :If r=1 ⋄ :Leave ⋄ :EndIf
-                name←3⊃#.SSH_C_Helpers.knownhost prev
-                :If name≡delname
+                key←4⊃#.SSH_C_Helpers.knownhost prev
+                :If key≡delkey
                     ⍝ delete this one
                     r←C.libssh2_knownhost_del ptr prev
                     ⎕SIGNAL(r<0)/⊂('EN'S.SSH_ERR)('Message' EMSG)
