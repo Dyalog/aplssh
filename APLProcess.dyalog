@@ -514,10 +514,8 @@
                 ⎕SIGNAL('EN'11)('Message' ('Process did not start.'))
             :EndIf
             
-            
-            
         :Else
-            ⎕SIGNAL('EN'11)('Message' ('SSH error: ',⎕DMX.Message))
+            ⎕SIGNAL⊂('EN'11)('Message' ('SSH error: ',⎕DMX.Message))
         :EndTrap
     ∇    
 
