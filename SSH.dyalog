@@ -9,7 +9,7 @@
 
     ⍝ convert binary functions to bitwise ones
     bin←{2⊥⍺⍺/2⊥⍣¯1⊢(⍺⍺/⍬),⍵}
-    
+
     ⍝ base64 encode/decode
     base64enc←{
         vals←⎕A,819⌶⎕A,⎕D,'+/'
@@ -17,7 +17,7 @@
         base64←2⊥⍉↑(⎕IO=6|⍳⍴bits)⊂bits
         vals[⎕IO+base64],((××4-⊢)4|⍴base64)/'='
     }
-    
+
     base64dec←{
         vals←⎕A,819⌶⎕A,⎕D,'+/'
         bits←,⍉(6/2)⊤(vals⍳⍵~'=')-⎕IO
@@ -282,6 +282,7 @@
             ⍝ Read a file over SCP, in one go.
             ∇(stat data)←ReadFile path;chan;size;amt;agn;d
                 :Access Public
+                :If ~Authenticated ⋄ 'Not authenticated' ⎕SIGNAL 11 ⋄ :EndIf
 
                 chan stat←SCP_Recv path
                 data←⍬
@@ -299,6 +300,8 @@
             ⍝ Optional left arg: mode, mtime, atime
             ∇{opts} WriteFile (path data);mode;size;mtime;atime;chan;agn;wr
                 :Access Public
+                :If ~Authenticated ⋄ 'Not authenticated' ⎕SIGNAL 11 ⋄ :EndIf
+                
                 :If 0=⎕NC'opts' ⋄ opts←⍬ ⋄ :EndIf
 
                 mode mtime atime←((8⊥6 4 4)0 0)defaults opts
@@ -321,6 +324,7 @@
             ⍝ Run a command, wait for it to finish.
             ∇{rslt}←Exec cmd;chan;stdout;agn;status
                 :Access Public
+                :If ~Authenticated ⋄ 'Not authenticated' ⎕SIGNAL 11 ⋄ :EndIf
 
                 ⍝ start a new channel to run our command on
                 chan←Channel_Open_Session
