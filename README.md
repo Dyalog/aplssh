@@ -59,3 +59,17 @@ This will be written.
       sess.Disconnect ⍬
       
 ```
+
+Also included is a version of `APLProcess` that supports SSH connections using these classes.
+
+To start an APL process on a remote machine:
+
+```apl
+x←⎕NEW APLProcess (ws args (host user pubkey privkey))
+```
+
+E.g.:
+
+```apl
+x←⎕NEW APLPRocess ('~/Test.dws' '' ('10.20.30.40' 'marinus' 'id_rsa.pub' 'id_rsa'))
+```
