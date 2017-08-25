@@ -1,1 +1,1 @@
-@CL /LD aplhelpers.c /link ws2_32.lib /out:aplhelpers.dll
+@CL /LD aplssh_helpers.c /link ws2_32.lib /out:aplssh_helpers.dll

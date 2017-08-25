@@ -3,7 +3,7 @@
 */
 
 
-#include "aplhelpers.h"
+#include "aplssh_helpers.h"
 #include <stdio.h>
 
 // test function

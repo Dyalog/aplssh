@@ -5,7 +5,8 @@
    are (for now at least) big enough on all platforms.
 */
 
-#ifndef __APLHELPERS_H__
+#ifndef __APLSSH_HELPERS_H__
+#define __APLSSH_HELPERS_H__
 
 #include <stdint.h>
 #include <libssh2.h>

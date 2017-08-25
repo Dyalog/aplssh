@@ -25,7 +25,7 @@
 
         ⍝ We expect the DLL to be in the script directory, failing that we want it on the path.
         path←{(~∨\'SSH_C_Helpers'⍷⍵)/⍵}ScriptPath
-        name←'aplhelpers.',⊃'so' 'dll'[1+isOS'Windows']
+        name←'aplssh_helpers.',⊃'so' 'dll'[1+isOS'Windows']
 
         ⍝ try loading it from the script directory
         path←path,name

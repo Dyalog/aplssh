@@ -1,6 +1,6 @@
 CC=gcc
 
-all: aplhelpers.so
+all: aplssh_helpers.so
 
-aplhelpers.so: aplhelpers.c
-	$(CC) -shared -o aplhelpers.so -fPIC aplhelpers.c    
+aplssh_helpers.so: aplssh_helpers.c
+	$(CC) -shared -o aplssh_helpers.so -fPIC aplssh_helpers.c    
