@@ -9,6 +9,17 @@
 
     ⍝ convert binary functions to bitwise ones
     bin←{2⊥⍺⍺/2⊥⍣¯1⊢(⍺⍺/⍬),⍵}
+ 
+    ∇ r←ScriptPath
+        ⍝ Adám's SourceFile function
+        r←{ ⍝ Get pathname to sourcefile for item ⍵
+            c←⎕NC⊂,⍕⍵
+            c=2.1:(SALT_Var_Data.VD[;1]⍳⊂⍵(⊢,~)'#.')⊃SALT_Var_Data.VD[;2],⊂''
+            c∊3.1 3.2 4.1 4.2:1↓⊃('§'∘=⊂⊢)∊¯2↑⎕NR ⍵
+            (r←326=⎕DR ⍵)∨c∊9+0.1×⍳8:{6::'' ⋄ ''≡f←⊃(4∘⊃¨(/⍨)(⍵≡⊃)¨)5177⌶⍬:⍵.SALT_Data.SourceFile ⋄ f}⍎⍣(~r)⊢⍵
+            ''
+        }⎕THIS
+    ∇
 
     ⍝ base64 encode/decode
     base64enc←{
@@ -790,7 +801,13 @@
 
         ⍝ load the library functions
         ∇ LoadLib;l
-            l←lib
+            l←lib    
+            :Trap 102 ⍝ if it's not on the path, try script directory        
+                ⎕NA'P  ',l,'|libssh2_version                         I'
+            :Else
+                l,⍨←{(~∨\'SSH.dyalog'⍷⍵)/⍵}#.SSH.ScriptPath 
+            :EndTrap
+
             ⎕NA'I  ',l,'|libssh2_agent_connect&                  P'
             ⎕NA'I  ',l,'|libssh2_agent_disconnect&               P'
             ⎕NA'I  ',l,'|libssh2_agent_free                      P'

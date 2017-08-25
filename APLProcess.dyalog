@@ -80,7 +80,8 @@
 
             :If IsSsh                             
                 (host port pubkey keyfile exe)←Exe  
-                cmd←args,' ',exe,' +s -q ',ws
+                cmd←args,' ',exe,' +s -q ',ws          
+                IsWin←0
                 Proc←SshProc host port pubkey keyfile cmd
             :Else
                 z←⍕GetCurrentProcessId                                                   
