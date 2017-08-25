@@ -147,9 +147,9 @@
                 r←r,(~(¯1↑r)∊'\/')/'/' ⍝ Add separator if necessary
                 r←r,(Diagnostics.Process.GetCurrentProcess.ProcessName),'.exe'
             :EndIf 
-        :ElseIf IsSsh
-            ∘∘∘ ⍝ Not supported
-        :Else
+        ⍝:ElseIf IsSsh
+        ⍝    ∘∘∘ ⍝ Not supported
+        :Else ⍝ SSH just uses UNIX commands
             t←⊃_PS'-o args -p ',⍕GetCurrentProcessId ⍝ AWS
             :If '"'''∊⍨⊃t  ⍝ if command begins with ' or "
                 r←{⍵/⍨{∧\⍵∨≠\⍵}⍵=⊃⍵}t
@@ -192,8 +192,8 @@
                         r←(kids[;1]∊m/p.Id)⌿kids
                     :EndIf
                 :EndIf
-            :ElseIf IsSsh
-                ∘∘∘
+            ⍝:ElseIf IsSsh
+            ⍝    ∘∘∘ 'Shoot' works for SSH as well
             :Else
                 mask←(⍬⍴⍴kids)⍴0
                 :For i :In ⍳⍴mask
@@ -205,7 +205,7 @@
     ∇
 
     ∇ r←{all}ListProcesses procName;me;⎕USING;procs;unames;names;name;i;pn;kid;parent;mask;n
-        :Access Public Shared
+        :Access Public
         ⍝ returns either my child processes or all processes
         ⍝ procName is either '' for all children, or the name of a process
         ⍝ r[;1] - child process number (Id)
@@ -240,9 +240,9 @@
                     :EndFor
                 :EndIf
             :EndIf 
-        :ElseIf IsSsh
-            ∘∘∘
-        :Else ⍝ Linux
+        ⍝:ElseIf IsSsh
+        ⍝    ∘∘∘
+        :Else ⍝ Linux / SSH (_PS takes care of sending the command over SSH if necessary)
             ⍝ unfortunately, Ubuntu (and perhaps others) report the PPID of tasks started via ⎕SH as 1
             ⍝ so, the best we can do at this point is identify processes that we tagged with ppid=
             mask←' '∧.=procs←' ',↑_PS'-eo pid,cmd',((~all)/' | grep APLppid=',(⍕GetCurrentProcessId)),(0<⍴procName)/' | grep ',procName,' | grep -v grep' ⍝ AWS
@@ -271,7 +271,17 @@
                     delay+←delay
                 :Until (delay>10)∨Proc.HasExited
             :ElseIf IsSsh
-                ∘∘∘
+                {}UNIXIssueKill 3 Proc.Id ⍝ issue strong interrupt (UNIXIssueKill handles SSH)
+                {}⎕DL 2 ⍝ wait a couple seconds for it to react
+                :If ~Proc.HasExited ⍝ a separate thread will do this once the SSH'ed process gets killed
+                    {}UNIXIssueKill 9 Proc.Id ⍝ briong out the big guns
+                    {}⎕DL 2
+                :AndIf ~Proc.HasExited
+                    :Repeat
+                        ⎕DL delay
+                        delay+←delay
+                    :Until (delay>10)∨Proc.HasExited
+                :EndIf
             :Else ⍝ Local UNIX
                 {}UNIXIssueKill 3 Proc.Id ⍝ issue strong interrupt
                 {}⎕DL 2 ⍝ wait a couple seconds for it to react
@@ -299,7 +309,9 @@
                         Proc.Kill
                         ⎕DL 0.2
                     :ElseIf IsSsh
-                        ∘∘∘
+                        {}UNIXIssueKill 3 Proc.Id
+                        {}⎕DL 2 ⍝ wait a couple seconds for it to react
+                        ⍝ Proc.HasExited will be set by a different thread 
                     :Else
                         {}UNIXIssueKill 3 Proc.Id ⍝ issue strong interrupt AWS
                         {}⎕DL 2 ⍝ wait a couple seconds for it to react
@@ -353,14 +365,19 @@
                 :EndTrap
             :EndIf
         :ElseIf IsSsh
-            ∘∘∘
+            r←UNIXIsRunning pid
         :Else
             r←UNIXIsRunning pid
         :EndIf
     ∇
 
+    ∇ r←SSHIsRunning pid;pids
+        pids←(∊⎕VFI¨SSHRunCmd 'ps -o pid -x')~0 1
+        r←pid∊pids
+    ∇
+        
     ∇ r←Stop pid;proc
-        :Access public shared
+        :Access public
         ⍝ attempts to stop the process with processID pid
         :If IsWin
             ⎕USING←'System,system.dll'
@@ -374,7 +391,7 @@
             {}⎕DL 0.5
             r←~##.APLProcess.IsRunning pid
         :ElseIf IsSsh
-            ∘∘∘
+            {}UNIXIssueKill 3 pid ⍝ sends the same command, but over SSH 
         :ElseIf
             {}UNIXIssueKill 3 pid ⍝ issue strong interrupt
         :EndIf
@@ -391,7 +408,7 @@
         signal pid←⍕¨signal pid
         cmd←'kill -',signal,' ',pid,' >/dev/null 2>&1 ; echo $?'
         :If IsSsh
-            ∘∘∘
+            r←SshRunCmd cmd
         :Else
             r←⎕SH cmd
         :EndIf
@@ -402,15 +419,20 @@
         cmd←(1+IsMac)⊃'cmd' 'command'
         cmd←'ps -o ',cmd,' -p ',(⍕pid),' 2>/dev/null ; exit 0'        
         :If IsSsh
-            ∘∘∘
+            r←⊃1↓SshRunCmd cmd
         :Else
             r←⊃1↓⎕SH cmd
         :EndIf
     ∇
 
-    ∇ r←_PS cmd;ps
+    ∇ r←_PS cmd;ps;fn
         ps←'ps ',⍨('AIX'≡3↑⊃'.'⎕WG'APLVersion')/'/usr/sysv/bin/'    ⍝ Must use this ps on AIX
-        r←1↓⎕SH ps,cmd,' 2>/dev/null; exit 0'                  ⍝ Remove header line
+        :If IsSsh
+            fn←SshRunCmd
+        :Else
+            fn←⎕SH
+        :EndIf
+        r←1↓fn ps,cmd,' 2>/dev/null; exit 0'                  ⍝ Remove header line
     ∇
 
     ∇ r←{quietly}_SH cmd
@@ -474,13 +496,30 @@
             ⍝ ComputerNamePhysicalDnsFullyQualified = 7 <<<
             ⍝ ComputerNameMax = 8
         :ElseIf IsSsh
-            ∘∘∘ ⍝ Not supported
+            r←⊃SshRunCmd'hostname'
         :ElseIf
             r←⊃_SH'hostname'
         :EndIf
     ∇
 
-    
+    ∇ x←{raw} SshRunCmd cmd;sess;host;user;privkey;pubkey
+        :If 0=⎕NC'raw' ⋄ raw←0 ⋄ :EndIf
+        
+        :If ~IsSsh
+        :OrIf 0=⎕NC⊂'Proc.SSHInfo'
+            ⎕SIGNAL⊂('EN'11)('Message' 'Not a SSH process instance.')
+        :EndIf
+        
+        :Trap #.SSH.SSH_ERR
+            host user pubkey privkey←Proc.SSHInfo
+            sess←⎕NEW #.SSH.Session (host 22)
+            sess.Userauth_Publickey user pubkey privkey ''
+            x←(⎕UCS¨{⎕ML←3 ⋄ ⍵⊂⍨⍵≠10})⍣(~raw)⊢2⊃sess.Exec cmd
+        :Else
+            ⎕SIGNAL⊂('EN'11)('Message' ('SSH error:', ⎕DMX.Message))
+        :EndTrap
+    ∇
+
     ∇ Proc←SshProc(host user pubkey privkey cmd);sess;runcmd;pids;listpids;pid
         ⍝ run a command and split the output on newlines
         runcmd←{
@@ -492,35 +531,36 @@
         :Trap #.SSH.SSH_ERR
             sess←⎕NEW #.SSH.Session (host 22)
             sess.Userauth_Publickey user pubkey privkey ''
-            
+
             ⍝ list the PIDs of currently running Dyalog instances
             listpids←{
-                pids←sess runcmd'ps -o pid,command -u ',user,' |grep dyalog|grep -v grep|awk ''{print $1}'''
+                pids←sess runcmd'ps -o pid,command -u ',user,' |grep dyalog|grep -v grep|grep -v sh\  |awk ''{print $1}'''
                 (∊⎕VFI¨pids)~0 1
             }
-            
+
             pids←listpids⍬
-            
+
             Proc←⎕NS''
             Proc.HasExited←0
-            Proc.tid←{SshRun (host user pubkey privkey) ⍵ Proc}&cmd
-            
+            Proc.SSHInfo←host user pubkey privkey
+            Proc.tid←{SshRun ⍵ Proc}&cmd
+
             ⎕DL 1 ⍝ wait for process to start
-            
+
             :If 1≤≢pid←(listpids⍬)~pids
-                Proc.Pid←⊃pid
+                Proc.Id←Proc.Pid←⊃pid
             :Else
                 ⍝ No new Dyalog process was started
                 ⎕SIGNAL('EN'11)('Message' ('Process did not start.'))
             :EndIf
-            
+
         :Else
             ⎕SIGNAL⊂('EN'11)('Message' ('SSH error: ',⎕DMX.Message))
         :EndTrap
     ∇    
 
-    ∇ SshRun (info cmd proc);host;user;pubkey;privkey;sess
-        host user pubkey privkey←info
+    ∇ SshRun (cmd proc);host;user;pubkey;privkey;sess
+        host user pubkey privkey←proc.SSHInfo
         sess←⎕NEW #.SSH.Session (host 22)
         sess.Userauth_Publickey user pubkey privkey ''
         {}sess.Exec cmd
