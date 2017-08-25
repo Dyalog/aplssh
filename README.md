@@ -65,11 +65,11 @@ Also included is a version of `APLProcess` that supports SSH connections using t
 To start an APL process on a remote machine:
 
 ```apl
-x←⎕NEW APLProcess (ws args (host user pubkey privkey))
+x←⎕NEW APLProcess (ws args (host user pubkey privkey executable))
 ```
 
 E.g.:
 
 ```apl
-x←⎕NEW APLPRocess ('~/Test.dws' '' ('10.20.30.40' 'marinus' 'id_rsa.pub' 'id_rsa'))
+x←⎕NEW APLPRocess ('~/Test.dws' '' ('10.20.30.40' 'marinus' 'id_rsa.pub' 'id_rsa' 'dyalog'))
 ```
