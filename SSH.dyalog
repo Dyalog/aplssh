@@ -109,11 +109,24 @@
 
         ⍝ Utility initializer, which does socket creation, connection, and handshake
         ⍝ all at once (if you don't need anything special)
-        ∇init_connect (host port);sock
+        ∇init_connect (host port);sock;addr;fam
             :Implements Constructor
             :Access Public
             _init_common ⍝ initialization
-            sock←⎕NEW #.Sock.Socket #.Sock.Cnst.SOCK_STREAM
+
+            ⍝ find whether to use IPV6 or IPV4
+            addr←#.Sock.GetAddrInfo (host (⍕port))
+
+            :If 0=≢addr
+                ⍝ None found
+                ⎕SIGNAL⊂('EN'6)('Message' 'No such host.')
+            :EndIf
+
+            ⍝ find family of first type of addr (= what to use)
+            fam←⊃⊃addr
+
+            sock←⎕NEW #.Sock.Socket (#.Sock.Cnst.SOCK_STREAM fam 0)
+
             sock.Connect (host port)
             Handshake sock
         ∇
@@ -301,7 +314,7 @@
             ∇{opts} WriteFile (path data);mode;size;mtime;atime;chan;agn;wr
                 :Access Public
                 :If ~Authenticated ⋄ 'Not authenticated' ⎕SIGNAL 11 ⋄ :EndIf
-                
+
                 :If 0=⎕NC'opts' ⋄ opts←⍬ ⋄ :EndIf
 
                 mode mtime atime←((8⊥6 4 4)0 0)defaults opts

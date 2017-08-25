@@ -65,7 +65,7 @@
 
         POLLIN←1
     :EndNamespace       
-    
+
     :Namespace WindowsConstants
         AF_UNSPEC←0
         AF_INET←2
@@ -75,7 +75,7 @@
         AI_V4MAPPED←2048
         AI_CANONNAME←2
         AI_PASSIVE←1
-        
+
         NI_NUMERICSERV←8
 
         SOCK_STREAM←1
@@ -85,7 +85,7 @@
 
         SOL_SOCKET←65535
         SO_REUSEADDR←4
-        
+
         POLLIN←768
     :EndNamespace
 
@@ -96,7 +96,7 @@
 
         ⍝ Make sure the C interop code is initialized
         #.CInterop.Init
-        
+
         ⍝ Make sure the C library is initialized
         #.SSH_C_Helpers.Init
         C←#.SSH_C_Helpers
@@ -132,7 +132,7 @@
         ⍝ gethostinfo
         ⎕NA'I ',socklib,'|getnameinfo P U =0C U =0C U I'
 
-        
+
         init←1
     ∇
 
@@ -142,14 +142,14 @@
 
         ⍝ closing a socket is done using 'close'
         ⎕NA'I ',socklib,'|close I'   
-        
+
         ⍝ polling is done using 'poll'
         ⎕NA'I ',socklib,'|poll ={I U2 U2} I I'
 
         ⍝ geterrno is supplied by dyalib
         ⎕NA'I ',#.NonWindows.dyalib,'geterrno'
 
-        
+
         Err←UnixErrors
         Cnst←UnixConstants
     ∇
@@ -163,7 +163,7 @@
 
         ⍝ geterrno is supplied (as WSAGetLastError) by the socket library
         'geterrno'⎕NA'I ',socklib,'|WSAGetLastError'      
-        
+
         ⍝ polling is done using 'WSAPoll'
         'poll'⎕NA'I ',socklib,'|WSAPoll ={I U2 U2} I I'
 
@@ -173,14 +173,14 @@
         Err←UnixErrors
         Cnst←WindowsConstants
     ∇
-             
+
     ⍝ This class wraps the Winsock startup and cleanup. An instance of it is put into
     ⍝ the Sock namespace during initialization, and its destructor is responsible for
     ⍝ calling WSACleanup.
     :Class Winsock
         :Field Public wsaversion←256⊥2 2 ⍝ version 2.2
         :Field Public wsadata ⍝ if you really feel like poking around in it
-        
+
         ∇init;start;r
             :Implements Constructor
             :Access Public
@@ -189,7 +189,7 @@
             r←start wsaversion wsadata.Ref
             ⎕SIGNAL(r≠0)/⊂('EN'#.Sock.SOCK_ERR)('Message'('Winsock initialization failed: ',⍕r))
         ∇
-        
+
         ∇destroy;stop;r
             :Implements Destructor
             :Access Private
@@ -209,45 +209,45 @@
 
 
 
-    
+
     ⍝ Get address info, using the C library
     ∇ r←{family} GetAddrInfo args;host;port;pasv;rt;sptr;ptr;fam;type;len;name;sa;next;blk
         host port←args[1 2]
         pasv←0
-        
+
         :If 3=≢args ⋄ pasv←args[3] ⋄ :EndIf
         :If 0=⎕NC'family' ⋄ family←0 ⋄ :EndIf
-        
+
         ⍝ allow for the port to be passed as a numbers
         :If 0=⍬⍴0⍴port ⋄ port←⍕port ⋄ :EndIf
-        
+
         ⍝ if no host is given, that means passive must be on
         pasv∨←0=≢host
-        
+
         ⍝ this returns 0 instead of a platform-specific error if no host is found,
         ⍝ but the pointer will still be 0.
         rt sptr←C.apl_getaddrinfo family host port pasv 0
-        
+
         r←⍬
-        
+
         ptr←sptr
         :While ptr≠0
             ⍝ Walk through the linked list and get all the etnries
             fam type len name sa next←C.apl_addr ptr
-            
+
             ⍝ Copy the socket data into a DataBlokck so it can be used
             blk←⎕NEW #.CInterop.DataBlock (len/0)
             blk.Load sa len
             r,←⊂fam type name blk
-            
+
             ptr←next
         :EndWhile
-        
+
         :If sptr≠0
             {}C.apl_freeaddrinfo sptr
         :EndIf   
     ∇
-        
+
     ⍝ Wrapper around 'poll'.
     :Class Poller
         :Field Private socks←⍬
@@ -314,17 +314,30 @@
 
         bin←{2⊥⍺⍺/2⊥⍣¯1⊢(⍺⍺/⍬),⍵}
 
-        ⍝ Make an IPV4 socket
-        ∇init type_
+        ⍝ Make a socket
+        ⍝ the third argument is ugly but for now it works
+        ∇init (type_ fam_ dummy)
             :Access Public
             :Implements Constructor
 
-            fam←#.Sock.Cnst.AF_INET
             type←type_
+            fam←fam_
 
             fd←#.Sock.socket fam type 0
             :If fd=¯1
                 ⎕SIGNAL ⊂('EN' #.Sock.SOCK_ERR)('Message' (⍕#.Sock.geterrno))
+            :EndIf
+        ∇
+
+        ⍝ Make an IPV4 socket
+        ∇init_ type_    
+            :Access Public
+            :Implements Constructor
+            fam←#.Sock.Cnst.AF_INET
+            type←type_
+            fd←#.Sock.socket fam type 0
+            :If fd=¯1
+                ⎕SIGNAL ⊂('EN' #.SOCK.SOCK_ERR)('Message' (⍕#.Sock.geterrno))
             :EndIf
         ∇
 
