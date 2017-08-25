@@ -1,6 +1,6 @@
 aplcore
 .*.sw?
-aplhelpers_test
+aplssh_helpers_test
 *.lib
 *.obj
 *.exp
