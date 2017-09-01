@@ -812,7 +812,6 @@
             ⎕NA'I  ',l,'|libssh2_agent_disconnect&               P'
             ⎕NA'I  ',l,'|libssh2_agent_free                      P'
             ⎕NA'I  ',l,'|libssh2_agent_get_identity              P P P'
-            ⎕NA'P  ',l,'|libssh2_version                         I'
             ⎕NA'P  ',l,'|libssh2_agent_init                      P'
             ⎕NA'I  ',l,'|libssh2_agent_list_identities           P'
             ⎕NA'I  ',l,'|libssh2_agent_userauth                  P <0C P'
