@@ -273,9 +273,9 @@
             :Access Public
             :Implements Constructor
 
-            ⍝ automatically convert strings to UTF-8 bytes
+            ⍝ automatically convert strings to nul-terminated UTF-8 bytes
             :If ''≡0↑data
-                data←'UTF-8'⎕UCS data
+                data←0,⍨'UTF-8'⎕UCS data
             :EndIf
 
             ptr←#.CInterop.AllocMem (size←≢data)

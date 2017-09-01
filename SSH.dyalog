@@ -235,7 +235,7 @@
             pkptr←0
             :If 0≠≢pubkey
                 ⍝ a public key is given, so we need to turn it into a C string
-                pkblk←⎕NEW #.CInterop.DataBlock (⎕UCS pubkey)
+                pkblk←⎕NEW #.CInterop.DataBlock pubkey
                 pkptr←pkblk.Ref
             :EndIf
 
