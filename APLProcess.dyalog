@@ -263,7 +263,8 @@
 
     ∇ r←Kill;delay
         :Access Public Instance
-        r←0 ⋄ delay←0.1
+        →(r←HasExited)⍴0
+        delay←0.1              
         :Trap 0
             :If IsWin
                 Proc.Kill
@@ -271,25 +272,13 @@
                     ⎕DL delay
                     delay+←delay
                 :Until (delay>10)∨Proc.HasExited
-            :ElseIf IsSsh
-                {}UNIXIssueKill 3 Proc.Id ⍝ issue strong interrupt (UNIXIssueKill handles SSH)
-                {}⎕DL 2 ⍝ wait a couple seconds for it to react
-                :If ~Proc.HasExited ⍝ a separate thread will do this once the SSH'ed process gets killed
-                    {}UNIXIssueKill 9 Proc.Id ⍝ briong out the big guns
-                    {}⎕DL 2
-                :AndIf ~Proc.HasExited
-                    :Repeat
-                        ⎕DL delay
-                        delay+←delay
-                    :Until (delay>10)∨Proc.HasExited
-                :EndIf
-            :Else ⍝ Local UNIX
+            :Else ⍝ ssh or Local UNIX
                 {}UNIXIssueKill 3 Proc.Id ⍝ issue strong interrupt
                 {}⎕DL 2 ⍝ wait a couple seconds for it to react
-                :If ~Proc.HasExited←~UNIXIsRunning Proc.Id
+                :If ~HasExited
                     {}UNIXIssueKill 9 Proc.Id ⍝ issue strong interrupt
                     {}⎕DL 2 ⍝ wait a couple seconds for it to react
-                :AndIf ~Proc.HasExited←~UNIXIsRunning Proc.Id
+                :AndIf ~HasExited
                     :Repeat
                         ⎕DL delay
                         delay+←delay
@@ -298,6 +287,24 @@
             :EndIf
             r←Proc.HasExited
         :EndTrap
+    ∇
+    
+    ∇ r←Interrupt n;delay;z;hwnd
+        :Access Public Instance
+        
+        '2 for weak or 3 for STRONG' ⎕SIGNAL (n∊2 3)↓11 
+        :If IsWin 
+            'Not supported under Windows' ⎕SIGNAL 11
+            ⍝ ↓↓↓ The following hack might work for a development interpreter 
+            ⍝ ↓↓↓ but 113 needs to be replace by the GUI ID for the Actions -> Interrups menu item
+            hwnd←Proc.MainWindowHandle.ToInt32
+            ⎕NA 'P user32|PostMessageA P U P P'
+            z←PostMessageA hwnd 273 113 0
+            ⍝ # 273 = WM_COMMAND    
+            ⍝ # 133 = the Actions -> Interrupt menu 
+        :Else
+            {}UNIXIssueKill n Proc.Id ⍝ issue strong interrupt
+        :EndIf
     ∇
 
     ∇ r←Shoot Proc;MAX;res
@@ -333,10 +340,10 @@
 
     ∇ r←HasExited
         :Access public instance
-        :If IsWin∨IsSsh
+        :If IsWin
             r←{0::⍵ ⋄ Proc.HasExited}1 
         :Else
-            r←~UNIXIsRunning Proc.Id ⍝ AWS
+            r←Proc.HasExited←~UNIXIsRunning Proc.Id 
         :EndIf
     ∇
 
@@ -567,6 +574,5 @@
         {}sess.Exec cmd
         proc.HasExited ← 1
     ∇
-
 
 :EndClass
